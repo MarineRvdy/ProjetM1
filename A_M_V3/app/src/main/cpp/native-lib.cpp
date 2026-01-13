@@ -75,7 +75,9 @@ extern "C" JNIEXPORT jobject JNICALL
 Java_com_example_test_1camera_MainActivity_passToCpp(
         JNIEnv* env,
         jobject,
-        jbyteArray image_data) {
+        jbyteArray image_data,
+        jint preview_width,
+        jint preview_height) {
 
     // Get byte array data from JNI
     byteData = env->GetByteArrayElements(image_data, nullptr);
@@ -157,8 +159,8 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
-        float x_ratio = 1080 / (float)EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = 2400 / (float)EI_CLASSIFIER_INPUT_HEIGHT;
+        float x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_WIDTH;
+        float y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_HEIGHT;
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
         float x = (float)bb.x * x_ratio;
@@ -202,8 +204,8 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.visual_ad_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.visual_ad_grid_cells[i];
 
-        float x_ratio = 1080 / (float)EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = 2400 / (float)EI_CLASSIFIER_INPUT_HEIGHT;
+        float x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_WIDTH;
+        float y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_HEIGHT;
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
         float x = (float)bb.x * x_ratio;

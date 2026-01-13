@@ -200,7 +200,9 @@ class MainActivity : ComponentActivity() {
 
         // Pass to C++ for Edge Impulse inference
         lifecycleScope.launch(Dispatchers.IO) {
-            val result = passToCpp(byteArray)
+            val previewWidth = previewView.width
+            val previewHeight = previewView.height
+            val result = passToCpp(byteArray, previewWidth, previewHeight)
             runOnUiThread {
                 displayResults(result)
             }
@@ -249,7 +251,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // Call the C++ function to process the image and return results
-    private external fun passToCpp(imageData: ByteArray): InferenceResult?
+    private external fun passToCpp(imageData: ByteArray, previewWidth: Int, previewHeight: Int): InferenceResult?
 
     // Display results in UI
     @SuppressLint("SetTextI18n")
