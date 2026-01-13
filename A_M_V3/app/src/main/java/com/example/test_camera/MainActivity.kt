@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -121,6 +122,11 @@ class MainActivity : ComponentActivity() {
 
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
+    // Function to detect current orientation
+    private fun isPortrait(): Boolean {
+        return resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -202,7 +208,8 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             val previewWidth = previewView.width
             val previewHeight = previewView.height
-            val result = passToCpp(byteArray, previewWidth, previewHeight)
+            val isPortraitMode = isPortrait()
+            val result = passToCpp(byteArray, previewWidth, previewHeight, isPortraitMode)
             runOnUiThread {
                 displayResults(result)
             }
@@ -221,9 +228,10 @@ class MainActivity : ComponentActivity() {
     // Convert Bitmap to ByteArray (RGB888 format)
     private fun getByteArrayFromBitmap(bitmap: Bitmap): ByteArray {
 
-        // Rotate the bitmap by 90 degrees
+        // Rotate the bitmap based on device orientation
         val matrix = Matrix()
-        matrix.postRotate(90f)
+        val rotationAngle = if (isPortrait()) 90f else 270f  // 270° for landscape to match camera orientation
+        matrix.postRotate(rotationAngle)
 
         val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
@@ -251,7 +259,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // Call the C++ function to process the image and return results
-    private external fun passToCpp(imageData: ByteArray, previewWidth: Int, previewHeight: Int): InferenceResult?
+    private external fun passToCpp(imageData: ByteArray, previewWidth: Int, previewHeight: Int, isPortrait: Boolean): InferenceResult?
 
     // Display results in UI
     @SuppressLint("SetTextI18n")

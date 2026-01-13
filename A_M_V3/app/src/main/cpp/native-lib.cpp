@@ -77,7 +77,8 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
         jobject,
         jbyteArray image_data,
         jint preview_width,
-        jint preview_height) {
+        jint preview_height,
+        jboolean is_portrait) {
 
     // Get byte array data from JNI
     byteData = env->GetByteArrayElements(image_data, nullptr);
@@ -159,14 +160,45 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
-        float x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;
-        float y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH;
+        
+        // Calculate ratios based on device orientation
+        float x_ratio, y_ratio;
+        if (is_portrait) {
+            // Portrait: image is rotated 90°, so width/height are swapped
+            x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;  // Use height for x
+            y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH; // Use width for y
+        } else {
+            // Landscape: image is rotated 270°, so width/height are swapped AND axes are inverted
+            x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;  // Use height for x
+            y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH; // Use width for y
+        }
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
-        float x = (float)bb.x * x_ratio;
-        float y = (float)bb.y * y_ratio;
-        float width = (float)bb.width * x_ratio;
-        float height = (float)bb.height * y_ratio;
+        float x, y, width, height;
+        if (is_portrait) {
+            // Portrait: normal scaling with 90° rotation
+            x = (float)bb.x * x_ratio;
+            y = (float)bb.y * y_ratio;
+            width = (float)bb.width * x_ratio;
+            height = (float)bb.height * y_ratio;
+        } else {
+            // Landscape: 270° rotation requires coordinate transformation
+            // Original (x,y) → Transformed (new_x, new_y)
+            float model_width = (float)EI_CLASSIFIER_INPUT_WIDTH;
+            float model_height = (float)EI_CLASSIFIER_INPUT_HEIGHT;
+            
+            // Transform coordinates for 270° rotation
+            // new_x = y, new_y = model_width - x - width
+            float new_x = bb.y * x_ratio;
+            float new_y = (model_width - bb.x - bb.width) * y_ratio;
+            float new_width = bb.height * x_ratio;
+            float new_height = bb.width * y_ratio;
+            
+            x = new_x;
+            y = new_y;
+            width = new_width;
+            height = new_height;
+        }
 
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x: %f, y: %f, width: %f, height: %f", x, y, width, height);
 
@@ -204,14 +236,44 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.visual_ad_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.visual_ad_grid_cells[i];
 
-        float x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;
-        float y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH
+        // Calculate ratios based on device orientation
+        float x_ratio, y_ratio;
+        if (is_portrait) {
+            // Portrait: image is rotated 90°, so width/height are swapped
+            x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;  // Use height for x
+            y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH; // Use width for y
+        } else {
+            // Landscape: image is rotated 270°, so width/height are swapped AND axes are inverted
+            x_ratio = preview_width / (float)EI_CLASSIFIER_INPUT_HEIGHT;  // Use height for x
+            y_ratio = preview_height / (float)EI_CLASSIFIER_INPUT_WIDTH; // Use width for y
+        }
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
-        float x = (float)bb.x * x_ratio;
-        float y = (float)bb.y * y_ratio;
-        float width = (float)bb.width * x_ratio;
-        float height = (float)bb.height * y_ratio;
+        float x, y, width, height;
+        if (is_portrait) {
+            // Portrait: normal scaling with 90° rotation
+            x = (float)bb.x * x_ratio;
+            y = (float)bb.y * y_ratio;
+            width = (float)bb.width * x_ratio;
+            height = (float)bb.height * y_ratio;
+        } else {
+            // Landscape: 270° rotation requires coordinate transformation
+            // Original (x,y) → Transformed (new_x, new_y)
+            float model_width = (float)EI_CLASSIFIER_INPUT_WIDTH;
+            float model_height = (float)EI_CLASSIFIER_INPUT_HEIGHT;
+            
+            // Transform coordinates for 270° rotation
+            // new_x = y, new_y = model_width - x - width
+            float new_x = bb.y * x_ratio;
+            float new_y = (model_width - bb.x - bb.width) * y_ratio;
+            float new_width = bb.height * x_ratio;
+            float new_height = bb.width * y_ratio;
+            
+            x = new_x;
+            y = new_y;
+            width = new_width;
+            height = new_height;
+        }
 
         jstring label = env->NewStringUTF("anomaly");
         jobject boundingBoxObj = env->NewObject(boundingBoxClass,
