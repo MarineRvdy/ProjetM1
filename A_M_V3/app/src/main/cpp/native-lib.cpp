@@ -207,10 +207,10 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
                                                 boundingBoxConstructor,
                                                 label,
                                                 (jfloat)bb.value,
-                                                (jint)x,
-                                                (jint)y,
-                                                (jint)width,
-                                                (jint)height);
+                                                (jint)round(x),
+                                                (jint)round(y),
+                                                (jint)round(width),
+                                                (jint)round(height));
         env->CallBooleanMethod(boundingBoxList, listAdd, boundingBoxObj);
 
         env->DeleteLocalRef(label);
@@ -280,10 +280,10 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
                                                 boundingBoxConstructor,
                                                 label,
                                                 (jfloat)bb.value,
-                                                (jint)x,
-                                                (jint)y,
-                                                (jint)width,
-                                                (jint)height);
+                                                (jint)round(x),
+                                                (jint)round(y),
+                                                (jint)round(width),
+                                                (jint)round(height));
         env->CallBooleanMethod(boundingBoxListAnomaly, listAdd, boundingBoxObj);
 
         env->DeleteLocalRef(label);
