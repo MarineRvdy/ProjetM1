@@ -161,6 +161,11 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
         
+         // Skip invalid bounding boxes with zero or near-zero coordinates
+        if (bb.width <= 1.0f || bb.height <= 1.0f) {
+            continue;
+        }
+        
         // Calculate ratios based on device orientation
         float x_ratio, y_ratio;
         if (is_portrait) {
@@ -235,6 +240,11 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     jobject boundingBoxListAnomaly = env->NewObject(listClass, env->GetMethodID(listClass, "<init>", "()V"));
     for (uint32_t i = 0; i < result.visual_ad_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.visual_ad_grid_cells[i];
+        
+        // Skip invalid bounding boxes with zero or near-zero coordinates
+        if (bb.width <= 1.0f || bb.height <= 1.0f) {
+            continue;
+        }
 
         // Calculate ratios based on device orientation
         float x_ratio, y_ratio;
