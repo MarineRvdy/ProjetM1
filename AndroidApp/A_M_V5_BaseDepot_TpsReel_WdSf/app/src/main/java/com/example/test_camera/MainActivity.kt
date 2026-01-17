@@ -121,26 +121,26 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
             } else {
                 // Standard object detection box with class-specific color
                 canvas.drawRect(rect, paint)
-                
+
                 // Background rectangle for text
                 val confidenceText = "${box.label} (${(box.confidence * 100).toInt()}%)"
                 val textBounds = android.graphics.Rect()
                 textPaint.getTextBounds(confidenceText, 0, confidenceText.length, textBounds)
-                
+
                 val textBackgroundRect = Rect(
                     box.x,
                     box.y - textBounds.height() - 15,
                     box.x + textBounds.width() + 10,
                     box.y - 5
                 )
-                
+
                 val backgroundPaint = Paint().apply {
                     color = paint.color
                     alpha = 200
                     style = Paint.Style.FILL
                 }
                 canvas.drawRect(textBackgroundRect, backgroundPaint)
-                
+
                 // Draw text
                 canvas.drawText(confidenceText, box.x.toFloat(), (box.y - 10).toFloat(), textPaint)
             }
@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity() {
 
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
-    
+
     // Throttling variables
     private var lastInferenceTime = 0L
     private val inferenceIntervalMs = 100L // 10 FPS max
@@ -181,6 +181,8 @@ class MainActivity : ComponentActivity() {
                 width = previewView.width
                 height = previewView.height
             }
+            // Set preview dimensions in native code for accurate bounding box scaling
+            setPreviewDimensions(previewView.width, previewView.height)
         }
 
         if (!hasCameraPermission()) {
@@ -230,15 +232,15 @@ class MainActivity : ComponentActivity() {
     // Process the captured image with throttling
     private fun processImage(imageProxy: ImageProxy) {
         val currentTime = currentTimeMillis()
-        
+
         // Apply throttling - only process inference at specified interval
         if (currentTime - lastInferenceTime < inferenceIntervalMs) {
             imageProxy.close()
             return
         }
-        
+
         lastInferenceTime = currentTime
-        
+
         // Convert ImageProxy to Bitmap
         val bitmap = imageProxy.toBitmap()
 
@@ -304,6 +306,9 @@ class MainActivity : ComponentActivity() {
     // Call the C++ function to process the image and return results
     private external fun passToCpp(imageData: ByteArray): InferenceResult?
 
+    // Call the C++ function to set preview dimensions
+    private external fun setPreviewDimensions(width: Int, height: Int)
+
     // Display results in UI
     @SuppressLint("SetTextI18n")
     private fun displayResults(result: InferenceResult?) {
@@ -316,16 +321,16 @@ class MainActivity : ComponentActivity() {
         } else
         {
             val currentDetectionCount = result.objectDetections?.size ?: 0
-            
+
             if (result.objectDetections != null && result.objectDetections.isNotEmpty()) {
                 // Display object detection results
                 boundingBoxOverlay.visibility = View.VISIBLE
                 boundingBoxOverlay.boundingBoxes = result.objectDetections
-                
+
                 // Update detection count
                 val articaCount = result.objectDetections.count { it.label.lowercase() == "artica" }
                 val monachaCount = result.objectDetections.count { it.label.lowercase() == "monacha" }
-                
+
                 detectionCountTextView.text = when {
                     articaCount > 0 && monachaCount > 0 -> "$articaCount artica, $monachaCount monacha détectés"
                     articaCount > 0 -> "$articaCount artica détecté${if (articaCount > 1) "s" else ""}"
@@ -338,7 +343,7 @@ class MainActivity : ComponentActivity() {
                 detectionCountTextView.text = "Aucun coquillage détecté"
                 detectionCountTextView.visibility = View.VISIBLE
             }
-            
+
             if (result.classification != null) {
                 // Display classification results
                 val classificationText = result.classification.entries.joinToString("\n") {
@@ -347,7 +352,7 @@ class MainActivity : ComponentActivity() {
                 resultTextView.text = "Classification:\n$classificationText"
                 resultTextView.visibility = View.VISIBLE
             }
-            
+
             if (result.visualAnomalyGridCells != null) {
                 // Display visual anomaly grid cells
                 val visualAnomalyMax = result.anomalyResult?.getValue("max")
@@ -357,7 +362,7 @@ class MainActivity : ComponentActivity() {
                 resultTextView.visibility = View.VISIBLE
                 resultTextView.text = "Visual anomaly values:\nMean: ${visualAnomalyMean}\nMax: ${visualAnomalyMax}"
             }
-            
+
             if (result.anomalyResult?.get("anomaly") != null) {
                 // Display anomaly detection score
                 val anomalyScore = result.anomalyResult.get("anomaly")
