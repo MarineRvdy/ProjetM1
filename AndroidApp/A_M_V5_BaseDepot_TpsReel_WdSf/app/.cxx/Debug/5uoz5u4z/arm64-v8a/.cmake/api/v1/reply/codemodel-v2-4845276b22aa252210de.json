@@ -1,0 +1,60 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.6.0"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "test_camera",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "test_camera::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-test_camera-Debug-5947bf51eb4cb330100e.json",
+					"name" : "test_camera",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/marin/Documents/ISEN/M1/S8/ProjetM1/ProjetM1/AndroidApp/A_M_V5_BaseDepot_TpsReel_WdSf/app/.cxx/Debug/5uoz5u4z/arm64-v8a",
+		"source" : "C:/Users/marin/Documents/ISEN/M1/S8/ProjetM1/ProjetM1/AndroidApp/A_M_V5_BaseDepot_TpsReel_WdSf/app/src/main/cpp"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 3
+	}
+}

@@ -1,0 +1,14 @@
+# ninja log v5
+21	688	7903567644852204	CMakeFiles/test_camera.dir/edge-impulse-sdk/dsp/dct/fast-dct-fft.cpp.o	7a89c6570947b154
+215	1052	7903567647837367	CMakeFiles/test_camera.dir/edge-impulse-sdk/porting/mingw32/ei_classifier_porting.cpp.o	ef6c55b0a8a37b44
+132	1154	7903567647602502	CMakeFiles/test_camera.dir/edge-impulse-sdk/porting/mingw32/debug_log.cpp.o	78b56ef7d0327ff4
+157	1243	7903567649887583	CMakeFiles/test_camera.dir/edge-impulse-sdk/porting/posix/debug_log.cpp.o	719aec922a691ab1
+1055	1504	7903567653437224	CMakeFiles/test_camera.dir/tflite-model/tflite_learn_874262_4.cpp.o	7836cb77e14ce20b
+692	1532	7903567654121567	CMakeFiles/test_camera.dir/edge-impulse-sdk/tensorflow/lite/c/common.c.o	9d14511d2b293d41
+116	1568	7903567654281588	CMakeFiles/test_camera.dir/edge-impulse-sdk/dsp/image/processing.cpp.o	3d9399ba60804a4f
+202	1737	7903567656092077	CMakeFiles/test_camera.dir/edge-impulse-sdk/porting/posix/ei_classifier_porting.cpp.o	2e03de328ad6dcd1
+37	1828	7903567656402799	CMakeFiles/test_camera.dir/edge-impulse-sdk/dsp/kissfft/kiss_fftr.cpp.o	5454ce0a1711f86e
+81	1911	7903567657186761	CMakeFiles/test_camera.dir/edge-impulse-sdk/dsp/kissfft/kiss_fft.cpp.o	e7c84a1d3a4e00c6
+145	8596	7903567722506581	CMakeFiles/test_camera.dir/edge-impulse-sdk/dsp/memory.cpp.o	4b68145c8e3a4560
+5	26703	7903567905944392	CMakeFiles/test_camera.dir/native-lib.cpp.o	7b3e3ac27c63fade
+26713	27749	7903567915215944	C:/Users/marin/Documents/ISEN/M1/S8/ProjetM1/ProjetM1/AndroidApp/A_M_V5_BaseDepot_TpsReel_WdSf/app/build/intermediates/cxx/Debug/5uoz5u4z/obj/arm64-v8a/libtest_camera.so	6d217ee0e22c4738

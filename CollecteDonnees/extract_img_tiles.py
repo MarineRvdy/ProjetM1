@@ -3,12 +3,15 @@
 import cv2
 import os
 import glob
+import numpy as np
 
 # --- Paramètres ---
 input_videos_dir = "videos"     # dossier contenant toutes tes vidéos
-frame_step = 10                  # 1 frame toutes les 10 frames
+frame_step = 300                 # 1 frame toutes les 10 frames
 tile_size = 192                  # taille des tiles 192x192
 tile_overlap = 42                # chevauchement en pixels entre tiles, pour ne pas couper les coquillages
+min_variance = 10                  # filtrer les tiles trop uniformes (sable)
+
 
 output_base_dir = "dataset"      # dossier de sortie
 
@@ -64,12 +67,17 @@ for video_path in video_paths:
                         if tile.shape[0] != tile_size or tile.shape[1] != tile_size:
                             tile = cv2.resize(tile, (tile_size, tile_size))
 
-                        # Nommer le fichier
-                        base_name = os.path.splitext(video_name)[0]
-                        tile_filename = os.path.join(output_dir, f"{base_name}_frame{frame_count:04d}_tile{tile_id:03d}.jpg")
-                        cv2.imwrite(tile_filename, tile)
-                        tile_id += 1
-                        saved_tiles += 1
+                        # Filtrer les tiles trop uniformes (sable)
+                        if np.var(tile) >= min_variance:
+                            # Nommer le fichier
+                            base_name = os.path.splitext(video_name)[0]
+                            tile_filename = os.path.join(
+                                output_dir,
+                                f"{base_name}_frame{frame_count:04d}_tile{tile_id:03d}.jpg"
+                            )
+                            cv2.imwrite(tile_filename, tile)
+                            tile_id += 1
+                            saved_tiles += 1
 
                     x += tile_size - tile_overlap
                 y += tile_size - tile_overlap
