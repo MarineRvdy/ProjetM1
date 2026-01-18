@@ -48,6 +48,7 @@ jbyte* byteData = nullptr;
 // Dynamic preview dimensions
 static int preview_width = 1080;
 static int preview_height = 1920;
+static bool is_landscape = false;
 
 static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr)
 {
@@ -79,10 +80,12 @@ Java_com_example_test_1camera_MainActivity_setPreviewDimensions(
         JNIEnv* env,
         jobject,
         jint width,
-        jint height) {
+        jint height,
+        jboolean isLandscape) {
     preview_width = width;
     preview_height = height;
-    __android_log_print(ANDROID_LOG_INFO, "MAIN", "Preview dimensions set to: %dx%d", width, height);
+    is_landscape = isLandscape;
+    __android_log_print(ANDROID_LOG_INFO, "MAIN", "Preview dimensions set to: %dx%d, landscape: %s", width, height, is_landscape ? "true" : "false");
 }
 
 extern "C" JNIEXPORT jobject JNICALL
@@ -171,14 +174,33 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
-        float x_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_HEIGHT;
+        float x_ratio, y_ratio;
+        if (is_landscape) {
+            // In landscape mode, swap the ratios
+            x_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_WIDTH;
+            y_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_HEIGHT;
+        } else {
+            // Portrait mode - original calculation
+            x_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_WIDTH;
+            y_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_HEIGHT;
+        }
         __android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
         float x = (float)bb.x * x_ratio;
         float y = (float)bb.y * y_ratio;
         float width = (float)bb.width * x_ratio;
         float height = (float)bb.height * y_ratio;
+
+        if (is_landscape) {
+            // In landscape mode, rotate coordinates 90 degrees clockwise
+            float temp_x = x;
+            x = preview_width - y - height;
+            y = temp_x;
+            
+            float temp_width = width;
+            width = height;
+            height = temp_width;
+        }
 
         __android_log_print(ANDROID_LOG_INFO, "MAIN", "x: %f, y: %f, width: %f, height: %f", x, y, width, height);
 
@@ -216,14 +238,33 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.visual_ad_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.visual_ad_grid_cells[i];
 
-        float x_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_HEIGHT;
+        float x_ratio, y_ratio;
+        if (is_landscape) {
+            // In landscape mode, swap the ratios
+            x_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_WIDTH;
+            y_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_HEIGHT;
+        } else {
+            // Portrait mode - original calculation
+            x_ratio = (float)preview_width / EI_CLASSIFIER_INPUT_WIDTH;
+            y_ratio = (float)preview_height / EI_CLASSIFIER_INPUT_HEIGHT;
+        }
         //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
 
         float x = (float)bb.x * x_ratio;
         float y = (float)bb.y * y_ratio;
         float width = (float)bb.width * x_ratio;
         float height = (float)bb.height * y_ratio;
+
+        if (is_landscape) {
+            // In landscape mode, rotate coordinates 90 degrees clockwise
+            float temp_x = x;
+            x = preview_width - y - height;
+            y = temp_x;
+            
+            float temp_width = width;
+            width = height;
+            height = temp_width;
+        }
 
         jstring label = env->NewStringUTF("anomaly");
         jobject boundingBoxObj = env->NewObject(boundingBoxClass,

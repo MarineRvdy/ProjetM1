@@ -12,7 +12,9 @@ import androidx.activity.ComponentActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.content.res.Configuration
 import androidx.lifecycle.lifecycleScope
 import com.example.test_camera.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +29,6 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.util.AttributeSet
 import android.view.View
-import androidx.core.app.ActivityCompat
 import android.os.Handler
 import android.os.Looper
 import java.lang.System.currentTimeMillis
@@ -182,7 +183,8 @@ class MainActivity : ComponentActivity() {
                 height = previewView.height
             }
             // Set preview dimensions in native code for accurate bounding box scaling
-            setPreviewDimensions(previewView.width, previewView.height)
+            val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            setPreviewDimensions(previewView.width, previewView.height, isLandscape)
         }
 
         if (!hasCameraPermission()) {
@@ -307,7 +309,7 @@ class MainActivity : ComponentActivity() {
     private external fun passToCpp(imageData: ByteArray): InferenceResult?
 
     // Call the C++ function to set preview dimensions
-    private external fun setPreviewDimensions(width: Int, height: Int)
+    private external fun setPreviewDimensions(width: Int, height: Int, isLandscape: Boolean)
 
     // Display results in UI
     @SuppressLint("SetTextI18n")
