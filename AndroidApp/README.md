@@ -9,8 +9,11 @@
 
 
 
-Terminal : 
+# Terminal : 
 
-git add <fichier>
-git commit -m "message"
-git push
+* git add <fichier>
+
+* git commit -m "message"
+
+* git push
+
