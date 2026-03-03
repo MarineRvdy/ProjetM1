@@ -115,7 +115,7 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
 
     // Get method IDs
     jmethodID resultConstructor = env->GetMethodID(resultClass, "<init>",
-                                                   "(Ljava/util/Map;Ljava/util/List;Ljava/util/List;Ljava/util/Map;Lcom/example/test_camera/Timing;)V");
+                                                   "(Ljava/util/Map;Ljava/util/List;Lcom/example/test_camera/Timing;)V");
 
     jmethodID boundingBoxConstructor = env->GetMethodID(boundingBoxClass, "<init>",
                                                         "(Ljava/lang/String;FIIII)V");
@@ -183,62 +183,6 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     }
 #endif
 
-    // Create HashMap for anomaly values
-    jobject anomalyResultMap = env->NewObject(hashMapClass, hashMapInit);
-
-#if EI_CLASSIFIER_HAS_ANOMALY != 3
-    jobject anomalyString = env->NewStringUTF("anomaly");
-    jobject anomalyValue = env->NewObject(floatClass, floatConstructor, (jfloat)result.anomaly);
-
-    env->CallObjectMethod(anomalyResultMap, hashMapPut, anomalyString, anomalyValue);
-    env->DeleteLocalRef(anomalyString);
-    env->DeleteLocalRef(anomalyValue);
-#endif
-
-#if EI_CLASSIFIER_HAS_VISUAL_ANOMALY
-    // Create ArrayList for visual anomaly grid cells
-    jobject boundingBoxListAnomaly = env->NewObject(listClass, env->GetMethodID(listClass, "<init>", "()V"));
-    for (uint32_t i = 0; i < result.visual_ad_count; i++) {
-        ei_impulse_result_bounding_box_t bb = result.visual_ad_grid_cells[i];
-
-        float x_ratio = 1080 / (float)EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = 2400 / (float)EI_CLASSIFIER_INPUT_HEIGHT;
-        //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
-
-        float x = (float)bb.x * x_ratio;
-        float y = (float)bb.y * y_ratio;
-        float width = (float)bb.width * x_ratio;
-        float height = (float)bb.height * y_ratio;
-
-        jstring label = env->NewStringUTF("anomaly");
-        jobject boundingBoxObj = env->NewObject(boundingBoxClass,
-                                                boundingBoxConstructor,
-                                                label,
-                                                (jfloat)bb.value,
-                                                (jint)x,
-                                                (jint)y,
-                                                (jint)width,
-                                                (jint)height);
-        env->CallBooleanMethod(boundingBoxListAnomaly, listAdd, boundingBoxObj);
-
-        env->DeleteLocalRef(label);
-        env->DeleteLocalRef(boundingBoxObj);
-    }
-
-    jobject maxString = env->NewStringUTF("max");
-    jobject maxValue = env->NewObject(floatClass, floatConstructor, (jfloat)result.visual_ad_result.max_value);
-
-    jobject meanString = env->NewStringUTF("mean");
-    jobject meanValue = env->NewObject(floatClass, floatConstructor, (jfloat)result.visual_ad_result.mean_value);
-
-    env->CallObjectMethod(anomalyResultMap, hashMapPut, maxString, maxValue);
-    env->CallObjectMethod(anomalyResultMap, hashMapPut, meanString, meanValue);
-    env->DeleteLocalRef(meanString);
-    env->DeleteLocalRef(maxString);
-    env->DeleteLocalRef(meanValue);
-    env->DeleteLocalRef(maxValue);
-#endif
-
     // Construct Timing object
     jobject timingObject = env->NewObject(timingClass, timingConstructor,
                                           result.timing.sampling,
@@ -259,16 +203,6 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
 #endif
 #if EI_CLASSIFIER_OBJECT_DETECTION == 1
             boundingBoxList,
-#else
-                                             nullptr,
-#endif
-#if EI_CLASSIFIER_HAS_VISUAL_ANOMALY
-            boundingBoxListAnomaly,
-#else
-                                             nullptr,
-#endif
-#if EI_CLASSIFIER_HAS_ANOMALY
-            anomalyResultMap,
 #else
                                              nullptr,
 #endif

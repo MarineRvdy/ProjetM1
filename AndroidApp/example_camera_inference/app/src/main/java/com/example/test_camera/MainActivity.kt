@@ -36,12 +36,14 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.media.AudioManager
+import android.media.ToneGenerator
 
 data class InferenceResult(
     val classification: Map<String, Float>?,   // Classification labels and values
     val objectDetections: List<BoundingBox>?,  // Object detection results
-    val visualAnomalyGridCells: List<BoundingBox>?, // Visual anomaly grid
-    val anomalyResult: Map<String, Float>?, // Anomaly values
     val timing: Timing  // Timing information
 )
 
@@ -131,6 +133,35 @@ class MainActivity : ComponentActivity() {
     private var imageCapture: ImageCapture? = null
 
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var lastDetectionTime = 0L
+    private val detectionCooldown = 1000L // 1 seconde entre les alertes
+
+    // Fonction pour déclencher une vibration
+    private fun vibrate() {
+        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(200)
+        }
+    }
+
+    // Fonction pour jouer un son de détection
+    private fun playDetectionSound() {
+        val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+    }
+
+    // Fonction combinée pour alerte vibration + son
+    private fun triggerDetectionAlert() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastDetectionTime > detectionCooldown) {
+            vibrate()
+            playDetectionSound()
+            lastDetectionTime = currentTime
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -306,7 +337,7 @@ class MainActivity : ComponentActivity() {
                 }
                 combinedText.append("Classification:\n$classificationText\n\n")
             }
-            if (result.objectDetections != null) {
+            if (result.objectDetections != null && result.objectDetections.isNotEmpty()) {
                 // Display object detection results
 //                val objectDetectionText = result.objectDetections.joinToString("\n") {
 //                    "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
@@ -314,25 +345,9 @@ class MainActivity : ComponentActivity() {
                 // Update bounding boxes on the overlay
                 boundingBoxOverlay.visibility = View.VISIBLE
                 boundingBoxOverlay.boundingBoxes = result.objectDetections
+                // Déclencher l'alerte de détection uniquement si des objets sont détectés
+                triggerDetectionAlert()
                 //combinedText.append("Object detection:\n$objectDetectionText\n\n")
-            }
-            if (result.visualAnomalyGridCells != null) {
-                // Display visual anomaly grid cells
-//                val visualAnomalyGridText = result.visualAnomalyGridCells.joinToString("\n") {
-//                    "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
-//                }
-                val visualAnomalyMax = result.anomalyResult?.getValue("max")
-                val visualAnomalyMean = result.anomalyResult?.getValue("mean")
-                boundingBoxOverlay.visibility = View.VISIBLE
-                boundingBoxOverlay.boundingBoxes = result.visualAnomalyGridCells
-                resultTextView.visibility = View.VISIBLE
-                combinedText.append("Visual anomaly values:\nMean: ${visualAnomalyMean}\nMax: ${visualAnomalyMax}")
-                //combinedText.append("Visual anomalies:\n$visualAnomalyGridText\n\nVisual anomaly values:\nMean: ${visualAnomalyMean}\nMax: ${visualAnomalyMax}\n\n")
-            }
-            if (result.anomalyResult?.get("anomaly") != null) {
-                // Display anomaly detection score
-                val anomalyScore = result.anomalyResult.get("anomaly")
-                combinedText.append("Anomaly score:\n${anomalyScore}")
             }
             // print the result
             val textToDisplay = combinedText.toString()
