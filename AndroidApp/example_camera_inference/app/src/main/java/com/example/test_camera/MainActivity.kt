@@ -125,6 +125,10 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        private const val CONFIDENCE_THRESHOLD = 0.8f  // 80% confidence threshold
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var resultTextView: TextView
     private lateinit var previewView: PreviewView
@@ -134,7 +138,7 @@ class MainActivity : ComponentActivity() {
 
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var lastDetectionTime = 0L
-    private val detectionCooldown = 1000L // 1 seconde entre les alertes
+    private val detectionCooldown = 3000L // 3 secondes entre les alertes
 
     // Fonction pour déclencher une vibration
     private fun vibrate() {
@@ -161,6 +165,11 @@ class MainActivity : ComponentActivity() {
             playDetectionSound()
             lastDetectionTime = currentTime
         }
+    }
+
+    // Fonction pour filtrer les détections selon le seuil de confiance
+    private fun filterDetections(detections: List<BoundingBox>?): List<BoundingBox>? {
+        return detections?.filter { it.confidence >= CONFIDENCE_THRESHOLD }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -337,17 +346,22 @@ class MainActivity : ComponentActivity() {
                 }
                 combinedText.append("Classification:\n$classificationText\n\n")
             }
-            if (result.objectDetections != null && result.objectDetections.isNotEmpty()) {
-                // Display object detection results
-//                val objectDetectionText = result.objectDetections.joinToString("\n") {
-//                    "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
-//                }
-                // Update bounding boxes on the overlay
-                boundingBoxOverlay.visibility = View.VISIBLE
-                boundingBoxOverlay.boundingBoxes = result.objectDetections
-                // Déclencher l'alerte de détection uniquement si des objets sont détectés
-                triggerDetectionAlert()
-                //combinedText.append("Object detection:\n$objectDetectionText\n\n")
+            if (result.objectDetections != null) {
+                // Filtrer les détections selon le seuil de confiance
+                val filteredDetections = filterDetections(result.objectDetections)
+                
+                if (filteredDetections != null && filteredDetections.isNotEmpty()) {
+                    // Display object detection results
+//                  val objectDetectionText = filteredDetections.joinToString("\n") {
+//                      "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
+//                  }
+                    // Update bounding boxes on the overlay
+                    boundingBoxOverlay.visibility = View.VISIBLE
+                    boundingBoxOverlay.boundingBoxes = filteredDetections
+                    // Déclencher l'alerte de détection uniquement si des objets détectés avec confiance suffisante
+                    triggerDetectionAlert()
+                    //combinedText.append("Object detection:\n$objectDetectionText\n\n")
+                }
             }
             // print the result
             val textToDisplay = combinedText.toString()
