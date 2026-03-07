@@ -134,6 +134,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var previewView: PreviewView
     private lateinit var boundingBoxOverlay: BoundingBoxOverlay
     private lateinit var captureButton: Button
+    private lateinit var detectionCounterTextView: TextView
     private var imageCapture: ImageCapture? = null
 
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -182,6 +183,7 @@ class MainActivity : ComponentActivity() {
         previewView = findViewById(R.id.previewView) // Camera preview view
         boundingBoxOverlay = findViewById(R.id.boundingBoxOverlay) // overlay for bbxes / visual ad
         captureButton = findViewById(R.id.captureButton) // Capture button
+        detectionCounterTextView = findViewById(R.id.detectionCounterTextView) // Detection counter
 
         // Set overlay size to match PreviewView
         previewView.post {
@@ -336,9 +338,12 @@ class MainActivity : ComponentActivity() {
 
         if (result == null) {
             resultTextView.text = "Error running inference"
+            detectionCounterTextView.text = "Détections: 0"
         } else
         {
             val combinedText = StringBuilder()
+            var detectionCount = 0
+            
             if (result.classification != null) {
                 // Display classification results
                 val classificationText = result.classification.entries.joinToString("\n") {
@@ -349,6 +354,7 @@ class MainActivity : ComponentActivity() {
             if (result.objectDetections != null) {
                 // Filtrer les détections selon le seuil de confiance
                 val filteredDetections = filterDetections(result.objectDetections)
+                detectionCount = filteredDetections?.size ?: 0
                 
                 if (filteredDetections != null && filteredDetections.isNotEmpty()) {
                     // Display object detection results
@@ -363,6 +369,10 @@ class MainActivity : ComponentActivity() {
                     //combinedText.append("Object detection:\n$objectDetectionText\n\n")
                 }
             }
+            
+            // Mettre à jour le compteur de détections
+            detectionCounterTextView.text = "Détections: $detectionCount"
+            
             // print the result
             val textToDisplay = combinedText.toString()
             //Log.d("MainActivity", "Result: $textToDisplay")

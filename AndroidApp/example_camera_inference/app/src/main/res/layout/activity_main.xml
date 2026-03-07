@@ -18,6 +18,38 @@
         android:background="@android:color/transparent"
         android:visibility="gone"/>
 
+    <!-- Result Display Frame -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:orientation="vertical"
+        android:background="@android:color/holo_blue_light"
+        android:gravity="center"
+        android:elevation="4dp"
+        android:layout_gravity="bottom">
+
+        <TextView
+            android:id="@+id/detectionCounterTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Détections: 0"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:padding="4dp"/>
+
+        <TextView
+            android:id="@+id/resultTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Inference Results"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:gravity="center"
+            android:padding="8dp"/>
+    </LinearLayout>
+
     <!-- Capture Photo Button -->
     <Button
         android:id="@+id/captureButton"
@@ -31,27 +63,5 @@
         android:textColor="@android:color/white"
         android:padding="12dp"
         android:elevation="8dp"/>
-
-    <!-- Result Display Frame -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="16dp"
-        android:orientation="vertical"
-        android:background="@android:color/holo_blue_light"
-        android:gravity="center"
-        android:elevation="4dp"
-        android:layout_gravity="bottom">
-
-        <TextView
-            android:id="@+id/resultTextView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Inference Results"
-            android:textSize="18sp"
-            android:textColor="@android:color/white"
-            android:gravity="center"
-            android:padding="8dp"/>
-    </LinearLayout>
 
 </FrameLayout>
