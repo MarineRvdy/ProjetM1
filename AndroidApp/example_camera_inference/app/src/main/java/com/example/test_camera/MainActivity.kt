@@ -130,7 +130,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var resultTextView: TextView
     private lateinit var previewView: PreviewView
     private lateinit var boundingBoxOverlay: BoundingBoxOverlay
     private lateinit var captureButton: Button
@@ -179,7 +178,6 @@ class MainActivity : ComponentActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        resultTextView = findViewById(R.id.resultTextView) // Result TextView
         previewView = findViewById(R.id.previewView) // Camera preview view
         boundingBoxOverlay = findViewById(R.id.boundingBoxOverlay) // overlay for bbxes / visual ad
         captureButton = findViewById(R.id.captureButton) // Capture button
@@ -251,7 +249,7 @@ class MainActivity : ComponentActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startCamera()
             } else {
-                resultTextView.text = "Camera permission required!"
+                Log.e("MainActivity", "Camera permission required!")
             }
         } else if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -333,11 +331,10 @@ class MainActivity : ComponentActivity() {
     // Display results in UI
     @SuppressLint("SetTextI18n")
     private fun displayResults(result: InferenceResult?) {
-        resultTextView.visibility = View.GONE
         boundingBoxOverlay.visibility = View.GONE
 
         if (result == null) {
-            resultTextView.text = "Error running inference"
+            Log.e("MainActivity", "Error running inference")
             detectionCounterTextView.text = "Détections: 0"
         } else
         {
@@ -375,8 +372,7 @@ class MainActivity : ComponentActivity() {
             
             // print the result
             val textToDisplay = combinedText.toString()
-            //Log.d("MainActivity", "Result: $textToDisplay")
-            resultTextView.text = textToDisplay
+            Log.d("MainActivity", "Result: $textToDisplay")
         }
     }
 

@@ -39,16 +39,7 @@
             android:textStyle="bold"
             android:padding="4dp"/>
 
-        <TextView
-            android:id="@+id/resultTextView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Inference Results"
-            android:textSize="18sp"
-            android:textColor="@android:color/white"
-            android:gravity="center"
-            android:padding="8dp"/>
-    </LinearLayout>
+            </LinearLayout>
 
     <!-- Capture Photo Button -->
     <Button
