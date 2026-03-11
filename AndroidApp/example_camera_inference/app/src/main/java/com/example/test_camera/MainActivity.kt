@@ -95,13 +95,58 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
             invalidate() // Redraw when new bounding boxes are set
         }
 
+    private var isCalibrated = false
+
+    fun setCalibrationEnabled(enabled: Boolean) {
+        isCalibrated = enabled
+    }
+
+    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
+        if (!isCalibrated) return Pair(x, y)
+        
+        val centerX = width / 2f
+        val centerY = height / 2f
+        
+        // Correction asymétrique basée sur les observations réelles
+        var correctedX = x.toFloat()
+        var correctedY = y.toFloat()
+        
+        // Correction horizontale (problème mineur mais aggravé)
+        if (x < centerX - 100) {
+            // Côté gauche : décaler plus vers la droite (+12px)
+            correctedX += 12f
+        } else if (x > centerX + 100) {
+            // Côté droit : décaler plus vers la gauche (-12px)
+            correctedX -= 12f
+        }
+        
+        // Correction verticale (problème majeur)
+        if (y < centerY - 300) {
+            // Haut de l'écran : décaler VERS le BAS (+115px)
+            correctedY += 115f
+        } else if (y > centerY + 300) {
+            // Bas de l'écran : décaler VERS le HAUT (-51px)
+            correctedY -= 51f
+        }
+        
+        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY)")
+        
+        return Pair(correctedX.toInt(), correctedY.toInt())
+    }
+
     @SuppressLint("DefaultLocale")
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(Color.TRANSPARENT) // Ensure transparency
 
+        Log.d("BOUNDING_BOX", "Drawing ${boundingBoxes.size} boxes on canvas: ${width}x${height}")
+
         boundingBoxes.forEach { box ->
-            val rect = Rect(box.x, box.y, box.x + box.width, box.y + box.height)
+            // Appliquer la correction de distorsion
+            val (correctedX, correctedY) = applyDistortionCorrection(box.x, box.y)
+            val rect = Rect(correctedX, correctedY, correctedX + box.width, correctedY + box.height)
+
+            Log.d("BOUNDING_BOX", "Box: ${box.label} at (${box.x},${box.y}) -> ($correctedX,$correctedY) size ${box.width}x${box.height}")
 
             if (box.label == "anomaly") {
                 // Fill the box with transparent red
@@ -117,7 +162,7 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
             } else {
                 // Standard object detection box
                 canvas.drawRect(rect, paint)
-                canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", box.x.toFloat(), (box.y - 10).toFloat(), textPaint)
+                canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", correctedX.toFloat(), (correctedY - 10).toFloat(), textPaint)
             }
         }
     }
@@ -127,7 +172,31 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val CONFIDENCE_THRESHOLD = 0.8f  // 80% confidence threshold
+        private const val OBJECT_COOLDOWN_MS = 10000L  // 10 secondes de cooldown par objet
+        private const val PROXIMITY_THRESHOLD = 120f  // 120 pixels de distance max pour les objets de 6480 pixels²
+        private const val CALIBRATION_GRID_SIZE = 5  // Grille 5x5 pour la calibration
     }
+
+    // Suivi des objets déjà comptés avec leur position et timestamp
+    data class CountedObject(
+        val label: String,
+        val x: Float,
+        val y: Float,
+        val timestamp: Long
+    )
+    private val countedObjects = mutableListOf<CountedObject>()
+    
+    // Variables pour la calibration de l'écran
+    data class CalibrationPoint(
+        val screenX: Float,
+        val screenY: Float,
+        val detectedX: Float,
+        val detectedY: Float
+    )
+    private val calibrationGrid = Array(CALIBRATION_GRID_SIZE) { 
+        Array(CALIBRATION_GRID_SIZE) { CalibrationPoint(0f, 0f, 0f, 0f) } 
+    }
+    private var isCalibrated = false
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var previewView: PreviewView
@@ -183,12 +252,20 @@ class MainActivity : ComponentActivity() {
         captureButton = findViewById(R.id.captureButton) // Capture button
         detectionCounterTextView = findViewById(R.id.detectionCounterTextView) // Detection counter
 
+        // Mettre à jour les ratios d'écran pour les bounding boxes
+        updateScreenDimensions()
+        
+        // Initialiser la calibration
+        initCalibration()
+
         // Set overlay size to match PreviewView
         previewView.post {
             boundingBoxOverlay.layoutParams = boundingBoxOverlay.layoutParams.apply {
                 width = previewView.width
                 height = previewView.height
             }
+            // Mettre à jour les ratios une seconde fois avec les bonnes dimensions
+            updateScreenDimensions()
         }
 
         if (!hasCameraPermission()) {
@@ -370,15 +447,63 @@ class MainActivity : ComponentActivity() {
             // Mettre à jour le compteur de détections
             detectionCounterTextView.text = "Détections: $detectionCount"
             
-            // print the result
-            val textToDisplay = combinedText.toString()
-            Log.d("MainActivity", "Result: $textToDisplay")
+            // Suppression du log verbeux pour faciliter le debug
+            // Log.d("MainActivity", "Result: $textToDisplay")
         }
     }
 
     // Load the native library
     init {
         System.loadLibrary("test_camera")
+    }
+
+    // Système de calibration simple pour corriger les distorsions
+    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
+        if (!isCalibrated) return Pair(x, y)
+        
+        // Calcul de la distance depuis le centre de l'écran
+        val centerX = previewView.width / 2f
+        val centerY = previewView.height / 2f
+        val distFromCenter = kotlin.math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY))
+        val maxDist = kotlin.math.sqrt(centerX * centerX + centerY * centerY)
+        
+        // Facteur de correction : plus de correction vers les bords
+        val correctionFactor = 1f + (distFromCenter / maxDist) * 0.15f // 15% de correction max
+        
+        val correctedX = centerX + (x - centerX) * correctionFactor
+        val correctedY = centerY + (y - centerY) * correctionFactor
+        
+        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (facteur: $correctionFactor)")
+        
+        return Pair(correctedX.toInt(), correctedY.toInt())
+    }
+
+    // Fonction native pour mettre à jour les ratios d'écran
+    private external fun updateScreenRatios(screenWidth: Int, screenHeight: Int)
+
+    // Fonction pour obtenir les dimensions de l'écran et mettre à jour les ratios
+    private fun updateScreenDimensions() {
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        
+        Log.d("SCREEN_INFO", "Écran: ${screenWidth}x${screenHeight}")
+        Log.d("SCREEN_INFO", "PreviewView: ${previewView.width}x${previewView.height}")
+        Log.d("SCREEN_INFO", "BoundingBoxOverlay: ${boundingBoxOverlay.width}x${boundingBoxOverlay.height}")
+        
+        // Utiliser les dimensions réelles du PreviewView pour les ratios
+        val previewWidth = if (previewView.width > 0) previewView.width else screenWidth
+        val previewHeight = if (previewView.height > 0) previewView.height else screenHeight
+        
+        // Mettre à jour les ratios dans le code C++
+        updateScreenRatios(previewWidth, previewHeight)
+        
+        Log.d("SCREEN_INFO", "Ratios calculés avec: ${previewWidth}x${previewHeight}")
+    }
+
+    private fun initCalibration() {
+        Log.d("CALIBRATION", "Activation de la correction asymétrique basée sur les observations")
+        boundingBoxOverlay.setCalibrationEnabled(true)
     }
 
     private fun takePhoto() {

@@ -45,6 +45,10 @@ jbyte* byteData = nullptr;
 #define CAMERA_INPUT_HEIGHT 640
 #define PIXEL_NUM 3
 
+// Variables globales pour les ratios d'écran dynamiques
+float g_x_ratio = 1080.0f / (float)EI_CLASSIFIER_INPUT_WIDTH;
+float g_y_ratio = 2400.0f / (float)EI_CLASSIFIER_INPUT_HEIGHT;
+
 static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr)
 {
     // we already have a RGB888 buffer, so recalculate offset into pixel index
@@ -156,16 +160,15 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     for (uint32_t i = 0; i < result.bounding_boxes_count; i++) {
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
-        float x_ratio = 1080 / (float)EI_CLASSIFIER_INPUT_WIDTH;
-        float y_ratio = 2400 / (float)EI_CLASSIFIER_INPUT_HEIGHT;
-        //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x_ratio: %f, y_ratio: %f", x_ratio, y_ratio);
+        
+        // Utiliser les ratios dynamiques mis à jour depuis Kotlin
+        float x = (float)bb.x * g_x_ratio;
+        float y = (float)bb.y * g_y_ratio;
+        float width = (float)bb.width * g_x_ratio;
+        float height = (float)bb.height * g_y_ratio;
 
-        float x = (float)bb.x * x_ratio;
-        float y = (float)bb.y * y_ratio;
-        float width = (float)bb.width * x_ratio;
-        float height = (float)bb.height * y_ratio;
-
-        //__android_log_print(ANDROID_LOG_INFO, "MAIN", "x: %f, y: %f, width: %f, height: %f", x, y, width, height);
+        __android_log_print(ANDROID_LOG_INFO, "MAIN", "BB: x=%f, y=%f, w=%f, h=%f (ratios: x=%f, y=%f)", 
+                            x, y, width, height, g_x_ratio, g_y_ratio);
 
         jstring label = env->NewStringUTF(bb.label);
         jobject boundingBoxObj = env->NewObject(boundingBoxClass,
@@ -209,4 +212,18 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
                                              timingObject);
 
     return inferenceResult;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_test_1camera_MainActivity_updateScreenRatios(
+        JNIEnv* env,
+        jobject,
+        jint screenWidth,
+        jint screenHeight) {
+    
+    g_x_ratio = (float)screenWidth / (float)EI_CLASSIFIER_INPUT_WIDTH;
+    g_y_ratio = (float)screenHeight / (float)EI_CLASSIFIER_INPUT_HEIGHT;
+    
+    __android_log_print(ANDROID_LOG_INFO, "MAIN", "Screen ratios updated: x_ratio=%f, y_ratio=%f (screen: %dx%d, model: %dx%d)", 
+                        g_x_ratio, g_y_ratio, screenWidth, screenHeight, EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT);
 }
