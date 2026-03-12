@@ -41,8 +41,8 @@
 #include "edge-impulse-sdk/dsp/image/image.hpp"
 
 jbyte* byteData = nullptr;
-#define CAMERA_INPUT_WIDTH 480
-#define CAMERA_INPUT_HEIGHT 640
+#define CAMERA_INPUT_WIDTH 640
+#define CAMERA_INPUT_HEIGHT 480
 #define PIXEL_NUM 3
 
 // Variables globales pour les ratios d'écran dynamiques

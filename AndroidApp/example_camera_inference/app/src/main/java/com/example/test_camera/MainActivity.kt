@@ -16,6 +16,7 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import android.util.Size
 import androidx.lifecycle.lifecycleScope
 import com.example.test_camera.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
@@ -171,7 +172,7 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
 class MainActivity : ComponentActivity() {
 
     companion object {
-        private const val CONFIDENCE_THRESHOLD = 0.8f  // 80% confidence threshold
+        private const val CONFIDENCE_THRESHOLD = 0.4f  // 40% confidence threshold (temporairement bas pour test)
         private const val OBJECT_COOLDOWN_MS = 10000L  // 10 secondes de cooldown par objet
         private const val PROXIMITY_THRESHOLD = 120f  // 120 pixels de distance max pour les objets de 6480 pixels²
         private const val CALIBRATION_GRID_SIZE = 5  // Grille 5x5 pour la calibration
@@ -205,6 +206,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var detectionCounterTextView: TextView
     private var imageCapture: ImageCapture? = null
 
+    private var lastInferenceTime = 0L
+    private val inferenceInterval = 100L  // 100ms entre les inférences (10 FPS)
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var lastDetectionTime = 0L
     private val detectionCooldown = 3000L // 3 secondes entre les alertes
@@ -294,7 +297,11 @@ class MainActivity : ComponentActivity() {
             
             imageCapture = ImageCapture.Builder().build()
             
-            val imageAnalysis = ImageAnalysis.Builder().build()
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setTargetResolution(Size(640, 480))  // Résolution plus élevée pour meilleure détection
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setImageQueueDepth(1)  // Réduire la profondeur de la queue
+                .build()
 
             imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                 processImage(imageProxy)
@@ -339,6 +346,16 @@ class MainActivity : ComponentActivity() {
 
     // Process the captured image
     private fun processImage(imageProxy: ImageProxy) {
+        val currentTime = System.currentTimeMillis()
+        
+        // Limiter la fréquence d'inférence à 10 FPS
+        if (currentTime - lastInferenceTime < inferenceInterval) {
+            imageProxy.close()
+            return
+        }
+        
+        lastInferenceTime = currentTime
+        
         // Convert ImageProxy to Bitmap
         val bitmap = imageProxy.toBitmap()
 
