@@ -108,29 +108,27 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         val centerX = width / 2f
         val centerY = height / 2f
         
-        // Correction asymétrique basée sur les observations réelles
-        var correctedX = x.toFloat()
-        var correctedY = y.toFloat()
+        // Calcul de la distance normalisée depuis le centre (0 au centre, 1 aux bords)
+        val distX = kotlin.math.abs(x - centerX) / centerX
+        val distY = kotlin.math.abs(y - centerY) / centerY
         
-        // Correction horizontale (problème mineur mais aggravé)
-        if (x < centerX - 100) {
-            // Côté gauche : décaler plus vers la droite (+12px)
-            correctedX += 12f
-        } else if (x > centerX + 100) {
-            // Côté droit : décaler plus vers la gauche (-12px)
-            correctedX -= 12f
+        // Correction additive progressive basée sur vos observations initiales
+        // Horizontal: max 12px de correction sur les bords
+        val correctionX = distX * distX * 12f * if (x < centerX) 1f else -1f
+        
+        // Vertical: max 115px vers le bas en haut, 51px vers le haut en bas
+        val correctionY = if (y < centerY) {
+            // Haut de l'écran : décaler vers le bas
+            distY * distY * 115f
+        } else {
+            // Bas de l'écran : décaler vers le haut  
+            -distY * distY * 51f
         }
         
-        // Correction verticale (problème majeur)
-        if (y < centerY - 300) {
-            // Haut de l'écran : décaler VERS le BAS (+115px)
-            correctedY += 115f
-        } else if (y > centerY + 300) {
-            // Bas de l'écran : décaler VERS le HAUT (-51px)
-            correctedY -= 51f
-        }
+        val correctedX = x + correctionX
+        val correctedY = y + correctionY
         
-        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY)")
+        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (corrX: $correctionX, corrY: $correctionY)")
         
         return Pair(correctedX.toInt(), correctedY.toInt())
     }
@@ -472,27 +470,6 @@ class MainActivity : ComponentActivity() {
     // Load the native library
     init {
         System.loadLibrary("test_camera")
-    }
-
-    // Système de calibration simple pour corriger les distorsions
-    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
-        if (!isCalibrated) return Pair(x, y)
-        
-        // Calcul de la distance depuis le centre de l'écran
-        val centerX = previewView.width / 2f
-        val centerY = previewView.height / 2f
-        val distFromCenter = kotlin.math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY))
-        val maxDist = kotlin.math.sqrt(centerX * centerX + centerY * centerY)
-        
-        // Facteur de correction : plus de correction vers les bords
-        val correctionFactor = 1f + (distFromCenter / maxDist) * 0.15f // 15% de correction max
-        
-        val correctedX = centerX + (x - centerX) * correctionFactor
-        val correctedY = centerY + (y - centerY) * correctionFactor
-        
-        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (facteur: $correctionFactor)")
-        
-        return Pair(correctedX.toInt(), correctedY.toInt())
     }
 
     // Fonction native pour mettre à jour les ratios d'écran
