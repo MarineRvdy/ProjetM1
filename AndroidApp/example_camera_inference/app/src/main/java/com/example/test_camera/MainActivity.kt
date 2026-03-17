@@ -104,38 +104,7 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         isCalibrated = enabled
     }
 
-    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
-        if (!isCalibrated) return Pair(x, y)
-        
-        val centerX = width / 2f
-        val centerY = height / 2f
-        
-        // Correction asymétrique basée sur les observations réelles
-        var correctedX = x.toFloat()
-        var correctedY = y.toFloat()
-        
-        // Correction horizontale (problème mineur mais aggravé)
-        if (x < centerX - 100) {
-            // Côté gauche : décaler plus vers la droite (+12px)
-            correctedX += 12f
-        } else if (x > centerX + 100) {
-            // Côté droit : décaler plus vers la gauche (-12px)
-            correctedX -= 12f
-        }
-        
-        // Correction verticale (problème majeur)
-        if (y < centerY - 300) {
-            // Haut de l'écran : décaler VERS le BAS (+115px)
-            correctedY += 115f
-        } else if (y > centerY + 300) {
-            // Bas de l'écran : décaler VERS le HAUT (-51px)
-            correctedY -= 51f
-        }
-        
-        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY)")
-        
-        return Pair(correctedX.toInt(), correctedY.toInt())
-    }
+    // Suppression de la correction de distorsion - le nouveau scaling gère correctement l'alignement
 
     @SuppressLint("DefaultLocale")
     override fun onDraw(canvas: Canvas) {
@@ -145,11 +114,10 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         Log.d("BOUNDING_BOX", "Drawing ${boundingBoxes.size} boxes on canvas: ${width}x${height}")
 
         boundingBoxes.forEach { box ->
-            // Appliquer la correction de distorsion
-            val (correctedX, correctedY) = applyDistortionCorrection(box.x, box.y)
-            val rect = Rect(correctedX, correctedY, correctedX + box.width, correctedY + box.height)
+            // Utiliser directement les coordonnées sans correction de distorsion
+            val rect = Rect(box.x, box.y, box.x + box.width, box.y + box.height)
 
-            Log.d("BOUNDING_BOX", "Box: ${box.label} at (${box.x},${box.y}) -> ($correctedX,$correctedY) size ${box.width}x${box.height}")
+            Log.d("BOUNDING_BOX", "Box: ${box.label} at (${box.x},${box.y}) size ${box.width}x${box.height}")
 
             if (box.label == "anomaly") {
                 // Fill the box with transparent red
@@ -165,7 +133,7 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
             } else {
                 // Standard object detection box
                 canvas.drawRect(rect, paint)
-                canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", correctedX.toFloat(), (correctedY - 10).toFloat(), textPaint)
+                canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", box.x.toFloat(), (box.y - 10).toFloat(), textPaint)
             }
         }
     }
@@ -539,26 +507,8 @@ class MainActivity : ComponentActivity() {
         System.loadLibrary("test_camera")
     }
 
-    // Système de calibration simple pour corriger les distorsions
-    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
-        if (!isCalibrated) return Pair(x, y)
-        
-        // Calcul de la distance depuis le centre de l'écran
-        val centerX = previewView.width / 2f
-        val centerY = previewView.height / 2f
-        val distFromCenter = kotlin.math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY))
-        val maxDist = kotlin.math.sqrt(centerX * centerX + centerY * centerY)
-        
-        // Facteur de correction : plus de correction vers les bords
-        val correctionFactor = 1f + (distFromCenter / maxDist) * 0.15f // 15% de correction max
-        
-        val correctedX = centerX + (x - centerX) * correctionFactor
-        val correctedY = centerY + (y - centerY) * correctionFactor
-        
-        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (facteur: $correctionFactor)")
-        
-        return Pair(correctedX.toInt(), correctedY.toInt())
-    }
+    // Système de calibration simplifié - plus de correction de distorsion nécessaire
+    // Le nouveau scaling gère correctement l'alignement des bounding boxes
 
     // Fonction native pour mettre à jour les ratios d'écran
     private external fun updateScreenRatios(screenWidth: Int, screenHeight: Int)
@@ -596,8 +546,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun initCalibration() {
-        Log.d("CALIBRATION", "Désactivation de la correction asymétrique pour tester le nouveau scaling")
-        boundingBoxOverlay.setCalibrationEnabled(false) // Désactiver pour tester
+        Log.d("CALIBRATION", "Correction de distorsion désactivée - utilisation du nouveau scaling")
+        boundingBoxOverlay.setCalibrationEnabled(false)
     }
 
     private fun takePhoto() {
