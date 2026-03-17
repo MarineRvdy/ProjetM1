@@ -69,6 +69,8 @@ data class Timing(
 
 private const val CAMERA_PERMISSION_REQUEST_CODE = 1001
 private const val STORAGE_PERMISSION_REQUEST_CODE = 1002
+private const val EI_CLASSIFIER_INPUT_WIDTH = 320  // Taille d'entrée du modèle
+private const val EI_CLASSIFIER_INPUT_HEIGHT = 320 // Taille d'entrée du modèle
 
 class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
@@ -108,27 +110,29 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         val centerX = width / 2f
         val centerY = height / 2f
         
-        // Calcul de la distance normalisée depuis le centre (0 au centre, 1 aux bords)
-        val distX = kotlin.math.abs(x - centerX) / centerX
-        val distY = kotlin.math.abs(y - centerY) / centerY
+        // Correction asymétrique basée sur les observations réelles
+        var correctedX = x.toFloat()
+        var correctedY = y.toFloat()
         
-        // Correction additive progressive basée sur vos observations initiales
-        // Horizontal: max 12px de correction sur les bords
-        val correctionX = distX * distX * 12f * if (x < centerX) 1f else -1f
-        
-        // Vertical: max 115px vers le bas en haut, 51px vers le haut en bas
-        val correctionY = if (y < centerY) {
-            // Haut de l'écran : décaler vers le bas
-            distY * distY * 115f
-        } else {
-            // Bas de l'écran : décaler vers le haut  
-            -distY * distY * 51f
+        // Correction horizontale (problème mineur mais aggravé)
+        if (x < centerX - 100) {
+            // Côté gauche : décaler plus vers la droite (+12px)
+            correctedX += 12f
+        } else if (x > centerX + 100) {
+            // Côté droit : décaler plus vers la gauche (-12px)
+            correctedX -= 12f
         }
         
-        val correctedX = x + correctionX
-        val correctedY = y + correctionY
+        // Correction verticale (problème majeur)
+        if (y < centerY - 300) {
+            // Haut de l'écran : décaler VERS le BAS (+115px)
+            correctedY += 115f
+        } else if (y > centerY + 300) {
+            // Bas de l'écran : décaler VERS le HAUT (-51px)
+            correctedY -= 51f
+        }
         
-        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (corrX: $correctionX, corrY: $correctionY)")
+        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY)")
         
         return Pair(correctedX.toInt(), correctedY.toInt())
     }
@@ -175,6 +179,10 @@ class MainActivity : ComponentActivity() {
         private const val PROXIMITY_THRESHOLD = 120f  // 120 pixels de distance max pour les objets de 6480 pixels²
         private const val CALIBRATION_GRID_SIZE = 5  // Grille 5x5 pour la calibration
     }
+
+    // Variables globales pour les ratios d'écran (synchronisées avec C++)
+    private var g_x_ratio = 1.0f
+    private var g_y_ratio = 1.0f
 
     // Suivi des objets déjà comptés avec leur position et timestamp
     data class CountedObject(
@@ -235,6 +243,43 @@ class MainActivity : ComponentActivity() {
             playDetectionSound()
             lastDetectionTime = currentTime
         }
+    }
+
+    // Fonction pour mettre à l'échelle les bounding boxes du modèle vers les coordonnées de la vue
+    // Gère correctement le "fit shortest axis" utilisé dans l'entraînement
+    private fun scaleBoundingBox(modelX: Float, modelY: Float, modelWidth: Float, modelHeight: Float): BoundingBox {
+        val viewWidth = previewView.width.toFloat()
+        val viewHeight = previewView.height.toFloat()
+        val modelSize = EI_CLASSIFIER_INPUT_WIDTH.toFloat() // Modèle 320x320
+        
+        // Calcul du scaling pour "fit shortest axis"
+        val scale = minOf(viewWidth / modelSize, viewHeight / modelSize)
+        
+        // Dimensions de l'image après scaling
+        val scaledWidth = modelSize * scale
+        val scaledHeight = modelSize * scale
+        
+        // Calcul des offsets pour centrer l'image
+        val offsetX = (viewWidth - scaledWidth) / 2f
+        val offsetY = (viewHeight - scaledHeight) / 2f
+        
+        // Mise à l'échelle des coordonnées
+        val scaledX = modelX * scale + offsetX
+        val scaledY = modelY * scale + offsetY
+        val scaledW = modelWidth * scale
+        val scaledH = modelHeight * scale
+        
+        Log.d("SCALING", "Model: ($modelX,$modelY,$modelWidth,$modelHeight) -> View: ($scaledX,$scaledY,$scaledW,$scaledH)")
+        Log.d("SCALING", "Scale: $scale, offsets: ($offsetX,$offsetY), view: ${viewWidth}x${viewHeight}")
+        
+        return BoundingBox(
+            label = "", // Sera rempli plus tard
+            confidence = 0f, // Sera rempli plus tard
+            x = scaledX.toInt(),
+            y = scaledY.toInt(),
+            width = scaledW.toInt(),
+            height = scaledH.toInt()
+        )
     }
 
     // Fonction pour filtrer les détections selon le seuil de confiance
@@ -446,13 +491,35 @@ class MainActivity : ComponentActivity() {
                 detectionCount = filteredDetections?.size ?: 0
                 
                 if (filteredDetections != null && filteredDetections.isNotEmpty()) {
+                    // Appliquer la mise à l'échelle correcte pour les bounding boxes
+                    val scaledDetections = filteredDetections.map { detection ->
+                        // Utiliser les coordonnées brutes du modèle (inverser le scaling actuel)
+                        val modelX = detection.x.toFloat() / g_x_ratio
+                        val modelY = detection.y.toFloat() / g_y_ratio  
+                        val modelWidth = detection.width.toFloat() / g_x_ratio
+                        val modelHeight = detection.height.toFloat() / g_y_ratio
+                        
+                        // Appliquer le nouveau scaling correct
+                        val scaledBox = scaleBoundingBox(modelX, modelY, modelWidth, modelHeight)
+                        
+                        // Conserver label et confidence originaux
+                        BoundingBox(
+                            label = detection.label,
+                            confidence = detection.confidence,
+                            x = scaledBox.x,
+                            y = scaledBox.y,
+                            width = scaledBox.width,
+                            height = scaledBox.height
+                        )
+                    }
+                    
                     // Display object detection results
-//                  val objectDetectionText = filteredDetections.joinToString("\n") {
+//                  val objectDetectionText = scaledDetections.joinToString("\n") {
 //                      "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
 //                  }
                     // Update bounding boxes on the overlay
                     boundingBoxOverlay.visibility = View.VISIBLE
-                    boundingBoxOverlay.boundingBoxes = filteredDetections
+                    boundingBoxOverlay.boundingBoxes = scaledDetections
                     // Déclencher l'alerte de détection uniquement si des objets détectés avec confiance suffisante
                     triggerDetectionAlert()
                     //combinedText.append("Object detection:\n$objectDetectionText\n\n")
@@ -472,8 +539,36 @@ class MainActivity : ComponentActivity() {
         System.loadLibrary("test_camera")
     }
 
+    // Système de calibration simple pour corriger les distorsions
+    private fun applyDistortionCorrection(x: Int, y: Int): Pair<Int, Int> {
+        if (!isCalibrated) return Pair(x, y)
+        
+        // Calcul de la distance depuis le centre de l'écran
+        val centerX = previewView.width / 2f
+        val centerY = previewView.height / 2f
+        val distFromCenter = kotlin.math.sqrt((x - centerX) * (x - centerX) + (y - centerY) * (y - centerY))
+        val maxDist = kotlin.math.sqrt(centerX * centerX + centerY * centerY)
+        
+        // Facteur de correction : plus de correction vers les bords
+        val correctionFactor = 1f + (distFromCenter / maxDist) * 0.15f // 15% de correction max
+        
+        val correctedX = centerX + (x - centerX) * correctionFactor
+        val correctedY = centerY + (y - centerY) * correctionFactor
+        
+        Log.d("CALIBRATION", "Correction: ($x,$y) -> ($correctedX,$correctedY) (facteur: $correctionFactor)")
+        
+        return Pair(correctedX.toInt(), correctedY.toInt())
+    }
+
     // Fonction native pour mettre à jour les ratios d'écran
     private external fun updateScreenRatios(screenWidth: Int, screenHeight: Int)
+
+    // Fonction pour mettre à jour les ratios locaux (appelée par le code natif)
+    private fun updateLocalRatios(xRatio: Float, yRatio: Float) {
+        g_x_ratio = xRatio
+        g_y_ratio = yRatio
+        Log.d("RATIOS", "Local ratios updated: x=$g_x_ratio, y=$g_y_ratio")
+    }
 
     // Fonction pour obtenir les dimensions de l'écran et mettre à jour les ratios
     private fun updateScreenDimensions() {
@@ -489,15 +584,20 @@ class MainActivity : ComponentActivity() {
         val previewWidth = if (previewView.width > 0) previewView.width else screenWidth
         val previewHeight = if (previewView.height > 0) previewView.height else screenHeight
         
+        // Mettre à jour les ratios locaux aussi
+        g_x_ratio = previewWidth.toFloat() / EI_CLASSIFIER_INPUT_WIDTH.toFloat()
+        g_y_ratio = previewHeight.toFloat() / EI_CLASSIFIER_INPUT_HEIGHT.toFloat()
+        
         // Mettre à jour les ratios dans le code C++
         updateScreenRatios(previewWidth, previewHeight)
         
         Log.d("SCREEN_INFO", "Ratios calculés avec: ${previewWidth}x${previewHeight}")
+        Log.d("SCREEN_INFO", "Local ratios: x=$g_x_ratio, y=$g_y_ratio")
     }
 
     private fun initCalibration() {
-        Log.d("CALIBRATION", "Activation de la correction asymétrique basée sur les observations")
-        boundingBoxOverlay.setCalibrationEnabled(true)
+        Log.d("CALIBRATION", "Désactivation de la correction asymétrique pour tester le nouveau scaling")
+        boundingBoxOverlay.setCalibrationEnabled(false) // Désactiver pour tester
     }
 
     private fun takePhoto() {
