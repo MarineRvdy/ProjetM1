@@ -26,7 +26,7 @@
         android:orientation="vertical"
         android:background="@android:color/holo_blue_light"
         android:gravity="center"
-        android:elevation="4dp"
+        android:elevation="5dp"
         android:layout_gravity="bottom">
 
         <TextView
@@ -40,6 +40,68 @@
             android:padding="4dp"/>
 
             </LinearLayout>
+
+    <!-- Validation Buttons (Hidden by Default) -->
+    <LinearLayout
+        android:id="@+id/validationButtonsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="16dp"
+        android:background="@android:color/background_dark"
+        android:visibility="gone"
+        android:elevation="10dp"
+        android:layout_marginBottom="80dp">
+
+        <Button
+            android:id="@+id/yesButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Yes"
+            android:textSize="16sp"
+            android:background="@android:color/holo_green_dark"
+            android:textColor="@android:color/white"
+            android:padding="12dp"/>
+
+        <Button
+            android:id="@+id/noButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:text="No"
+            android:textSize="16sp"
+            android:background="@android:color/holo_orange_dark"
+            android:textColor="@android:color/white"
+            android:padding="12dp"/>
+
+        <Button
+            android:id="@+id/trashButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Trash"
+            android:textSize="16sp"
+            android:background="@android:color/holo_red_dark"
+            android:textColor="@android:color/white"
+            android:padding="12dp"/>
+
+    </LinearLayout>
+
+    <!-- Frozen Image Display (Hidden by Default) -->
+    <ImageView
+        android:id="@+id/frozenImageView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:visibility="gone"
+        android:elevation="5dp"/>
 
     <!-- Capture Photo Button -->
     <Button

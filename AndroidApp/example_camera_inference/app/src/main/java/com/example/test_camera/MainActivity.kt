@@ -11,6 +11,8 @@ import android.Manifest
 import android.widget.TextView
 import android.widget.Button
 import android.widget.Toast
+import android.widget.LinearLayout
+import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -92,6 +94,19 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         alpha = 60 // Adjust transparency
     }
 
+    // Ajout du paint pour le cadre de centrage
+    private val centeringFramePaint = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.STROKE
+        strokeWidth = 8f
+    }
+
+    private val centeringFrameFillPaint = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.FILL
+        alpha = 30 // Transparent
+    }
+
     var boundingBoxes: List<BoundingBox> = emptyList()
         set(value) {
             field = value
@@ -99,9 +114,15 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         }
 
     private var isCalibrated = false
+    private var isCenteringMode = false
 
     fun setCalibrationEnabled(enabled: Boolean) {
         isCalibrated = enabled
+    }
+
+    fun setCenteringMode(enabled: Boolean) {
+        isCenteringMode = enabled
+        invalidate() // Redraw when centering mode changes
     }
 
     // Suppression de la correction de distorsion - le nouveau scaling gère correctement l'alignement
@@ -111,29 +132,58 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
         super.onDraw(canvas)
         canvas.drawColor(Color.TRANSPARENT) // Ensure transparency
 
-        Log.d("BOUNDING_BOX", "Drawing ${boundingBoxes.size} boxes on canvas: ${width}x${height}")
+        // Dessiner le cadre de centrage 320x320 si en mode centrage
+        if (isCenteringMode) {
+            val frameSize = 320f
+            val frameLeft = (width - frameSize) / 2f
+            val frameTop = (height - frameSize) / 2f
+            val frameRight = frameLeft + frameSize
+            val frameBottom = frameTop + frameSize
+            
+            // Dessiner le fond semi-transparent
+            canvas.drawRect(frameLeft, frameTop, frameRight, frameBottom, centeringFrameFillPaint)
+            
+            // Dessiner le cadre
+            canvas.drawRect(frameLeft, frameTop, frameRight, frameBottom, centeringFramePaint)
+            
+            // Dessiner des coins pour mieux visualiser
+            val cornerSize = 50f
+            // Coin supérieur gauche
+            canvas.drawRect(frameLeft, frameTop, frameLeft + cornerSize, frameTop + 8f, centeringFramePaint)
+            canvas.drawRect(frameLeft, frameTop, frameLeft + 8f, frameTop + cornerSize, centeringFramePaint)
+            // Coin supérieur droit
+            canvas.drawRect(frameRight - cornerSize, frameTop, frameRight, frameTop + 8f, centeringFramePaint)
+            canvas.drawRect(frameRight - 8f, frameTop, frameRight, frameTop + cornerSize, centeringFramePaint)
+            // Coin inférieur gauche
+            canvas.drawRect(frameLeft, frameBottom - 8f, frameLeft + cornerSize, frameBottom, centeringFramePaint)
+            canvas.drawRect(frameLeft, frameBottom - cornerSize, frameLeft + 8f, frameBottom, centeringFramePaint)
+            // Coin inférieur droit
+            canvas.drawRect(frameRight - cornerSize, frameBottom - 8f, frameRight, frameBottom, centeringFramePaint)
+            canvas.drawRect(frameRight - 8f, frameBottom - cornerSize, frameRight, frameBottom, centeringFramePaint)
+        }
 
-        boundingBoxes.forEach { box ->
-            // Utiliser directement les coordonnées sans correction de distorsion
-            val rect = Rect(box.x, box.y, box.x + box.width, box.y + box.height)
+        // Dessiner les bounding boxes seulement si présentes
+        if (boundingBoxes.isNotEmpty()) {
+            boundingBoxes.forEach { box ->
+                // Utiliser directement les coordonnées sans correction de distorsion
+                val rect = Rect(box.x, box.y, box.x + box.width, box.y + box.height)
 
-            Log.d("BOUNDING_BOX", "Box: ${box.label} at (${box.x},${box.y}) size ${box.width}x${box.height}")
+                if (box.label == "anomaly") {
+                    // Fill the box with transparent red
+                    canvas.drawRect(rect, anomalyPaint)
 
-            if (box.label == "anomaly") {
-                // Fill the box with transparent red
-                canvas.drawRect(rect, anomalyPaint)
+                    // Display anomaly score in the center
+                    val scoreText = String.format("%.2f", box.confidence)
+                    val textX = rect.centerX().toFloat()
+                    val textY = rect.centerY().toFloat()
 
-                // Display anomaly score in the center
-                val scoreText = String.format("%.2f", box.confidence)
-                val textX = rect.centerX().toFloat()
-                val textY = rect.centerY().toFloat()
-
-                textPaint.textAlign = Paint.Align.CENTER
-                canvas.drawText(scoreText, textX, textY, textPaint)
-            } else {
-                // Standard object detection box
-                canvas.drawRect(rect, paint)
-                canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", box.x.toFloat(), (box.y - 10).toFloat(), textPaint)
+                    textPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(scoreText, textX, textY, textPaint)
+                } else {
+                    // Standard object detection box
+                    canvas.drawRect(rect, paint)
+                    canvas.drawText("${box.label} (${(box.confidence * 100).toInt()}%)", box.x.toFloat(), (box.y - 10).toFloat(), textPaint)
+                }
             }
         }
     }
@@ -178,13 +228,27 @@ class MainActivity : ComponentActivity() {
     private lateinit var boundingBoxOverlay: BoundingBoxOverlay
     private lateinit var captureButton: Button
     private lateinit var detectionCounterTextView: TextView
+    private lateinit var validationButtonsLayout: LinearLayout
+    private lateinit var yesButton: Button
+    private lateinit var noButton: Button
+    private lateinit var trashButton: Button
+    private lateinit var frozenImageView: ImageView
     private var imageCapture: ImageCapture? = null
+    private var imageAnalysis: ImageAnalysis? = null
 
     private var lastInferenceTime = 0L
-    private val inferenceInterval = 100L  // 100ms entre les inférences (10 FPS)
+    private val inferenceInterval = 100L  // 100ms entre les inférences (10 FPS) - remis comme avant
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var lastDetectionTime = 0L
-    private val detectionCooldown = 3000L // 3 secondes entre les alertes
+    private val detectionCooldown = 5000L // 5 secondes entre les détections pour éviter les validations trop fréquentes
+    
+    // Variables pour le flux de validation
+    private var isValidationMode = false
+    private var isCenteringMode = false  // Nouveau mode pour le centrage
+    private var frozenBitmap: Bitmap? = null
+    private var currentDetections: List<BoundingBox>? = null
+    private var centeredFrameCount = 0  // Compteur de frames centrées
+    private val REQUIRED_CENTERED_FRAMES = 10  // Nombre de frames requises pour validation
 
     // Fonction pour déclencher une vibration
     private fun vibrate() {
@@ -205,12 +269,8 @@ class MainActivity : ComponentActivity() {
 
     // Fonction combinée pour alerte vibration + son
     private fun triggerDetectionAlert() {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastDetectionTime > detectionCooldown) {
-            vibrate()
-            playDetectionSound()
-            lastDetectionTime = currentTime
-        }
+        vibrate()
+        playDetectionSound()
     }
 
     // Fonction pour mettre à l'échelle les bounding boxes du modèle vers les coordonnées de la vue
@@ -265,6 +325,11 @@ class MainActivity : ComponentActivity() {
         boundingBoxOverlay = findViewById(R.id.boundingBoxOverlay) // overlay for bbxes / visual ad
         captureButton = findViewById(R.id.captureButton) // Capture button
         detectionCounterTextView = findViewById(R.id.detectionCounterTextView) // Detection counter
+        validationButtonsLayout = findViewById(R.id.validationButtonsLayout) as LinearLayout // Validation buttons layout
+        yesButton = findViewById(R.id.yesButton) // Yes button
+        noButton = findViewById(R.id.noButton) // No button
+        trashButton = findViewById(R.id.trashButton) // Trash button
+        frozenImageView = findViewById(R.id.frozenImageView) // Frozen image display
 
         // Mettre à jour les ratios d'écran pour les bounding boxes
         updateScreenDimensions()
@@ -295,6 +360,19 @@ class MainActivity : ComponentActivity() {
                 requestStoragePermission()
             }
         }
+        
+        // Validation buttons listeners
+        yesButton.setOnClickListener {
+            handleValidationChoice("yes")
+        }
+        
+        noButton.setOnClickListener {
+            handleValidationChoice("no")
+        }
+        
+        trashButton.setOnClickListener {
+            handleValidationChoice("trash")
+        }
 
     }
 
@@ -307,14 +385,13 @@ class MainActivity : ComponentActivity() {
             preview.setSurfaceProvider(previewView.surfaceProvider)
             
             imageCapture = ImageCapture.Builder().build()
-            
-            val imageAnalysis = ImageAnalysis.Builder()
+            imageAnalysis = ImageAnalysis.Builder()
                 .setTargetResolution(Size(640, 480))  // Résolution plus élevée pour meilleure détection
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setImageQueueDepth(1)  // Réduire la profondeur de la queue
                 .build()
 
-            imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+            imageAnalysis?.setAnalyzer(cameraExecutor) { imageProxy ->
                 processImage(imageProxy)
             }
 
@@ -359,6 +436,12 @@ class MainActivity : ComponentActivity() {
     private fun processImage(imageProxy: ImageProxy) {
         val currentTime = System.currentTimeMillis()
         
+        // Si en mode validation, ignorer le traitement
+        if (isValidationMode) {
+            imageProxy.close()
+            return
+        }
+        
         // Limiter la fréquence d'inférence à 10 FPS
         if (currentTime - lastInferenceTime < inferenceInterval) {
             imageProxy.close()
@@ -369,6 +452,7 @@ class MainActivity : ComponentActivity() {
         
         // Convert ImageProxy to Bitmap
         val bitmap = imageProxy.toBitmap()
+        frozenBitmap = bitmap // Garder une référence pour la validation
 
         // Resize the Bitmap to Edge Impulse model size
         // val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 64, 64, true)
@@ -436,15 +520,14 @@ class MainActivity : ComponentActivity() {
     // Display results in UI
     @SuppressLint("SetTextI18n")
     private fun displayResults(result: InferenceResult?) {
-        boundingBoxOverlay.visibility = View.GONE
-
         if (result == null) {
             Log.e("MainActivity", "Error running inference")
             detectionCounterTextView.text = "Détections: 0"
+            boundingBoxOverlay.visibility = View.GONE
         } else
         {
             val combinedText = StringBuilder()
-            var detectionCount = 0
+            var currentDetectionCount = 0
             
             if (result.classification != null) {
                 // Display classification results
@@ -456,10 +539,10 @@ class MainActivity : ComponentActivity() {
             if (result.objectDetections != null) {
                 // Filtrer les détections selon le seuil de confiance
                 val filteredDetections = filterDetections(result.objectDetections)
-                detectionCount = filteredDetections?.size ?: 0
+                currentDetectionCount = filteredDetections?.size ?: 0
                 
                 if (filteredDetections != null && filteredDetections.isNotEmpty()) {
-                    // Appliquer la mise à l'échelle correcte pour les bounding boxes
+                    // Appliquer la mise à l'échelle correcte pour les bounding boxes (optimisé)
                     val scaledDetections = filteredDetections.map { detection ->
                         // Utiliser les coordonnées brutes du modèle (inverser le scaling actuel)
                         val modelX = detection.x.toFloat() / g_x_ratio
@@ -481,24 +564,52 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     
-                    // Display object detection results
-//                  val objectDetectionText = scaledDetections.joinToString("\n") {
-//                      "${it.label}: ${it.confidence}, ${it.x}, ${it.y}, ${it.width}, ${it.height}"
-//                  }
-                    // Update bounding boxes on the overlay
+                    // Afficher les bounding boxes sur le flux temps réel (priorité absolue)
                     boundingBoxOverlay.visibility = View.VISIBLE
                     boundingBoxOverlay.boundingBoxes = scaledDetections
-                    // Déclencher l'alerte de détection uniquement si des objets détectés avec confiance suffisante
-                    triggerDetectionAlert()
-                    //combinedText.append("Object detection:\n$objectDetectionText\n\n")
+                    
+                    // Logique de détection légère - seulement si pas déjà en mode
+                    if (!isCenteringMode && !isValidationMode) {
+                        // Mode normal : première détection
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastDetectionTime > detectionCooldown) {
+                            lastDetectionTime = currentTime
+                            currentDetections = scaledDetections
+                            triggerDetectionAlert()
+                            enterCenteringMode()
+                        }
+                    } else if (isCenteringMode) {
+                        // Mode centrage : vérification simple
+                        val isCentered = checkIfDetectionIsCentered(scaledDetections)
+                        if (isCentered) {
+                            centeredFrameCount++
+                            if (centeredFrameCount >= REQUIRED_CENTERED_FRAMES) {
+                                currentDetections = scaledDetections
+                                exitCenteringMode()
+                                enterValidationMode()
+                            }
+                        } else {
+                            centeredFrameCount = 0
+                        }
+                    }
+                } else {
+                    // Masquer les bounding boxes si aucune détection
+                    boundingBoxOverlay.visibility = View.GONE
                 }
+            } else {
+                // Masquer les bounding boxes si aucune détection
+                boundingBoxOverlay.visibility = View.GONE
             }
             
-            // Mettre à jour le compteur de détections
-            detectionCounterTextView.text = "Détections: $detectionCount"
-            
-            // Suppression du log verbeux pour faciliter le debug
-            // Log.d("MainActivity", "Result: $textToDisplay")
+            // Mettre à jour le compteur selon le mode
+            if (isValidationMode) {
+                // Mode validation : afficher le nombre de détections sur l'image capturée
+                val capturedDetectionsCount = currentDetections?.size ?: 0
+                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+            } else {
+                // Mode temps réel : afficher le nombre de détections actuelles
+                detectionCounterTextView.text = "Détections: $currentDetectionCount"
+            }
         }
     }
 
@@ -549,45 +660,305 @@ class MainActivity : ComponentActivity() {
         Log.d("CALIBRATION", "Correction de distorsion désactivée - utilisation du nouveau scaling")
         boundingBoxOverlay.setCalibrationEnabled(false)
     }
-
-    private fun takePhoto() {
-        val imageCapture = imageCapture ?: return
-
-        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
-            .format(System.currentTimeMillis())
-        val contentValues = android.content.ContentValues().apply {
-            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Photo_$name")
-            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/CameraInference")
+    
+    // Fonctions pour le flux de validation
+    private fun enterCenteringMode() {
+        isCenteringMode = true
+        centeredFrameCount = 0
+        
+        // Afficher le cadre de centrage 320x320
+        boundingBoxOverlay.setCenteringMode(true)
+        
+        // Afficher un message pour guider l'utilisateur
+        runOnUiThread {
+            Toast.makeText(this, "Centrez la détection dans le cadre", Toast.LENGTH_LONG).show()
         }
-
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(
-                contentResolver,
-                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            )
-            .build()
-
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e("MainActivity", "Photo capture failed: ${exc.message}", exc)
-                    runOnUiThread {
-                        Toast.makeText(baseContext, "Photo capture failed: ${exc.message}", Toast.LENGTH_SHORT).show()
+        
+        Log.d("CENTERING", "Entrée en mode centrage")
+    }
+    
+    private fun exitCenteringMode() {
+        isCenteringMode = false
+        
+        // Masquer le cadre de centrage
+        boundingBoxOverlay.setCenteringMode(false)
+        
+        Log.d("CENTERING", "Sortie du mode centrage")
+    }
+    
+    private fun checkIfDetectionIsCentered(detections: List<BoundingBox>): Boolean {
+        if (detections.isEmpty()) return false
+        
+        val viewWidth = previewView.width.toFloat()
+        val viewHeight = previewView.height.toFloat()
+        
+        // Calculer les dimensions du cadre 320x320 au centre
+        val frameSize = 320f
+        val frameLeft = (viewWidth - frameSize) / 2f
+        val frameTop = (viewHeight - frameSize) / 2f
+        val frameRight = frameLeft + frameSize
+        val frameBottom = frameTop + frameSize
+        
+        // Vérifier si la première détection est dans le cadre
+        val detection = detections[0]
+        val detectionCenterX = detection.x + detection.width / 2f
+        val detectionCenterY = detection.y + detection.height / 2f
+        
+        val isCentered = detectionCenterX >= frameLeft && 
+                        detectionCenterX <= frameRight && 
+                        detectionCenterY >= frameTop && 
+                        detectionCenterY <= frameBottom
+        
+        // Log seulement pour les changements importants
+        if (isCentered && centeredFrameCount % 5 == 0) {
+            Log.d("CENTERING", "Frames centrées: $centeredFrameCount/$REQUIRED_CENTERED_FRAMES")
+        }
+        
+        return isCentered
+    }
+    
+    private fun enterValidationMode() {
+        isValidationMode = true
+        
+        // Afficher l'image figée par-dessus le flux vidéo
+        frozenBitmap?.let { bitmap ->
+            // Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
+            val matrix = Matrix()
+            matrix.postRotate(90f)
+            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            
+            frozenImageView.setImageBitmap(rotatedBitmap)
+            frozenImageView.visibility = View.VISIBLE
+            
+            // Afficher les bounding boxes sur l'image figée
+            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+            
+            // Mettre à jour le compteur avec les détections sur l'image capturée
+            val capturedDetectionsCount = currentDetections?.size ?: 0
+            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+        }
+        
+        // Afficher les 3 boutons pour la détection automatique
+        yesButton.visibility = View.VISIBLE
+        noButton.visibility = View.VISIBLE
+        trashButton.visibility = View.VISIBLE
+        
+        validationButtonsLayout.visibility = View.VISIBLE
+        captureButton.visibility = View.GONE
+        
+        Log.d("VALIDATION", "Entrée en mode validation automatique (3 boutons)")
+    }
+    
+    private fun displayBoundingBoxesOnFrozenImage(rotatedBitmap: Bitmap) {
+        // Créer un bitmap copie pour dessiner les bounding boxes
+        val mutableBitmap = rotatedBitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(mutableBitmap)
+        
+        // Configuration des peintures
+        val paint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = 4f  // Réduit de 8f à 4f
+        }
+        
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 30f  // Réduit de 60f à 30f
+            style = Paint.Style.FILL
+            setShadowLayer(4f, 2f, 2f, Color.BLACK)
+        }
+        
+        // Adapter les coordonnées des bounding boxes pour l'image plus petite
+        val imageWidth = rotatedBitmap.width.toFloat()
+        val imageHeight = rotatedBitmap.height.toFloat()
+        val previewWidth = previewView.width.toFloat()
+        val previewHeight = previewView.height.toFloat()
+        
+        // Calculer le ratio de scaling entre le PreviewView et l'image
+        val scaleX = imageWidth / previewWidth
+        val scaleY = imageHeight / previewHeight
+        
+        // Dessiner les bounding boxes adaptées à l'image
+        currentDetections?.forEach { box ->
+            // Adapter les coordonnées pour l'image plus petite
+            val adaptedX = (box.x * scaleX).toInt()
+            val adaptedY = (box.y * scaleY).toInt()
+            val adaptedWidth = (box.width * scaleX).toInt()
+            val adaptedHeight = (box.height * scaleY).toInt()
+            
+            val rect = Rect(adaptedX, adaptedY, adaptedX + adaptedWidth, adaptedY + adaptedHeight)
+            
+            // Dessiner le rectangle
+            canvas.drawRect(rect, paint)
+            
+            // Dessiner le label et la confiance
+            val labelText = "${box.label} (${(box.confidence * 100).toInt()}%)"
+            canvas.drawText(labelText, adaptedX.toFloat(), (adaptedY - 15).toFloat(), textPaint)
+        }
+        
+        // Mettre à jour l'image avec les bounding boxes
+        frozenImageView.setImageBitmap(mutableBitmap)
+    }
+    
+    private fun exitValidationMode() {
+        isValidationMode = false
+        
+        // Masquer l'image figée et les boutons de validation
+        frozenImageView.visibility = View.GONE
+        validationButtonsLayout.visibility = View.GONE
+        captureButton.visibility = View.VISIBLE
+        
+        // Nettoyer les ressources
+        frozenBitmap = null
+        currentDetections = null
+        
+        Log.d("VALIDATION", "Sortie du mode validation")
+    }
+    
+    private fun handleValidationChoice(choice: String) {
+        val bitmap = frozenBitmap
+        if (bitmap != null) {
+            when (choice) {
+                "yes" -> {
+                    // Vérifier si c'est une capture manuelle ou automatique
+                    val isManualCapture = (noButton.visibility == View.GONE)
+                    
+                    if (isManualCapture) {
+                        // Capture manuelle : sauvegarder dans non_detection_vrai
+                        saveValidationImage(bitmap, "non_detection_vrai")
+                        Log.d("MANUAL_VALIDATION", "Image sauvegardée dans non_detection_vrai/")
+                    } else {
+                        // Détection automatique : sauvegarder dans vraie
+                        saveValidationImage(bitmap, "vraie")
+                        Log.d("VALIDATION", "Image sauvegardée dans vraie/")
                     }
                 }
-
-                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    val savedUri = output.savedUri ?: return
-                    Log.d("MainActivity", "Photo saved: $savedUri")
-                    runOnUiThread {
-                        Toast.makeText(baseContext, "Photo saved successfully!", Toast.LENGTH_SHORT).show()
-                    }
+                "no" -> {
+                    // Seulement pour la détection automatique
+                    saveValidationImage(bitmap, "fausse_alarme")
+                    Log.d("VALIDATION", "Image sauvegardée dans fausse_alarme/")
+                }
+                "trash" -> {
+                    Log.d("VALIDATION", "Image ignorée")
                 }
             }
-        )
+        }
+        
+        // Reprendre le flux temps réel (le compteur est déjà mis à jour dans displayResults)
+        exitValidationMode()
+    }
+    
+    private fun handleManualCapture() {
+        // Prendre une photo manuelle avec un flux différent (2 boutons)
+        frozenBitmap?.let { bitmap ->
+            // Créer des détections factices pour le mode validation (ou utiliser les détections actuelles si présentes)
+            val detectionsForValidation = currentDetections ?: emptyList()
+            currentDetections = detectionsForValidation
+            
+            // Entrer en mode validation manuelle avec 2 boutons
+            enterManualValidationMode()
+            
+            Log.d("MANUAL_CAPTURE", "Capture manuelle déclenchée")
+        }
+    }
+    
+    private fun enterManualValidationMode() {
+        isValidationMode = true
+        
+        // Afficher l'image figée par-dessus le flux vidéo
+        frozenBitmap?.let { bitmap ->
+            // Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
+            val matrix = Matrix()
+            matrix.postRotate(90f)
+            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            
+            frozenImageView.setImageBitmap(rotatedBitmap)
+            frozenImageView.visibility = View.VISIBLE
+            
+            // Afficher les bounding boxes sur l'image figée
+            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+            
+            // Mettre à jour le compteur avec les détections sur l'image capturée
+            val capturedDetectionsCount = currentDetections?.size ?: 0
+            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+        }
+        
+        // Afficher seulement les boutons Yes et Trash pour la capture manuelle
+        yesButton.visibility = View.VISIBLE
+        trashButton.visibility = View.VISIBLE
+        noButton.visibility = View.GONE  // Masquer le bouton No
+        
+        validationButtonsLayout.visibility = View.VISIBLE
+        captureButton.visibility = View.GONE
+        
+        Log.d("MANUAL_VALIDATION", "Entrée en mode validation manuelle (2 boutons)")
+    }
+    
+    private fun saveValidationImage(bitmap: Bitmap, subfolder: String) {
+        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
+            .format(System.currentTimeMillis())
+        
+        val contentValues = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Detection_$name")
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, 
+                 Environment.DIRECTORY_PICTURES + "/TrividaeDetection/$subfolder")
+        }
+
+        // Utiliser la même logique que takePhoto mais avec le bitmap figé
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Tourner l'image à 90 degrés avant de sauvegarder
+                val matrix = Matrix()
+                matrix.postRotate(90f)
+                val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                
+                // Créer un fichier temporaire pour sauvegarder le bitmap
+                val tempFile = File(cacheDir, "temp_image_$name.jpg")
+                val fos = FileOutputStream(tempFile)
+                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+                fos.close()
+                
+                // Créer l'URI de destination
+                val uri = contentResolver.insert(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
+                
+                if (uri != null) {
+                    // Copier vers MediaStore
+                    val inputStream = tempFile.inputStream()
+                    val outputStream = contentResolver.openOutputStream(uri)
+                    inputStream.use { input ->
+                        outputStream?.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    
+                    // Nettoyer
+                    tempFile.delete()
+                    rotatedBitmap.recycle() // Libérer la mémoire
+                    
+                    Log.d("VALIDATION", "Image sauvegardée avec succès dans: $subfolder")
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "Image sauvegardée dans: $subfolder", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Log.e("VALIDATION", "Impossible de créer l'URI pour la sauvegarde")
+                    tempFile.delete()
+                    rotatedBitmap.recycle()
+                }
+            } catch (e: Exception) {
+                Log.e("VALIDATION", "Erreur lors de la sauvegarde: ${e.message}", e)
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "Erreur lors de la sauvegarde: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun takePhoto() {
+        // Utiliser le flux de validation au lieu de la sauvegarde simple
+        handleManualCapture()
     }
 }
