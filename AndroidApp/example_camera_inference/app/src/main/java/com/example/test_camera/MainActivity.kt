@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
     private var frozenBitmap: Bitmap? = null
     private var currentDetections: List<BoundingBox>? = null
     private var centeredFrameCount = 0  // Compteur de frames centrées
-    private val REQUIRED_CENTERED_FRAMES = 10  // Nombre de frames requises pour validation
+    private val REQUIRED_CENTERED_FRAMES = 5  // Nombre de frames requises pour validation (réduit de 10 à 3)
 
     // Fonction pour déclencher une vibration
     private fun vibrate() {
@@ -699,22 +699,26 @@ class MainActivity : ComponentActivity() {
         val frameRight = frameLeft + frameSize
         val frameBottom = frameTop + frameSize
         
-        // Vérifier si la première détection est dans le cadre
-        val detection = detections[0]
-        val detectionCenterX = detection.x + detection.width / 2f
-        val detectionCenterY = detection.y + detection.height / 2f
-        
-        val isCentered = detectionCenterX >= frameLeft && 
-                        detectionCenterX <= frameRight && 
-                        detectionCenterY >= frameTop && 
-                        detectionCenterY <= frameBottom
-        
-        // Log seulement pour les changements importants
-        if (isCentered && centeredFrameCount % 5 == 0) {
-            Log.d("CENTERING", "Frames centrées: $centeredFrameCount/$REQUIRED_CENTERED_FRAMES")
+        // Vérifier si AU MOINS UNE des détections est dans le cadre
+        for (detection in detections) {
+            val detectionCenterX = detection.x + detection.width / 2f
+            val detectionCenterY = detection.y + detection.height / 2f
+            
+            val isCentered = detectionCenterX >= frameLeft && 
+                            detectionCenterX <= frameRight && 
+                            detectionCenterY >= frameTop && 
+                            detectionCenterY <= frameBottom
+            
+            if (isCentered) {
+                // Log seulement pour les changements importants
+                if (centeredFrameCount % 5 == 0) {
+                    Log.d("CENTERING", "Frames centrées: $centeredFrameCount/$REQUIRED_CENTERED_FRAMES")
+                }
+                return true // Au moins une détection est centrée
+            }
         }
         
-        return isCentered
+        return false // Aucune détection n'est centrée
     }
     
     private fun enterValidationMode() {
@@ -738,7 +742,11 @@ class MainActivity : ComponentActivity() {
             detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
         }
         
-        // Afficher les 3 boutons pour la détection automatique
+        // Afficher les 3 boutons pour la détection automatique avec les nouveaux textes
+        yesButton.text = "Détection vraie"
+        noButton.text = "Détection fausse"
+        trashButton.text = "Trash"
+        
         yesButton.visibility = View.VISIBLE
         noButton.visibility = View.VISIBLE
         trashButton.visibility = View.VISIBLE
@@ -824,17 +832,17 @@ class MainActivity : ComponentActivity() {
                     val isManualCapture = (noButton.visibility == View.GONE)
                     
                     if (isManualCapture) {
-                        // Capture manuelle : sauvegarder dans non_detection_vrai
-                        saveValidationImage(bitmap, "non_detection_vrai")
-                        Log.d("MANUAL_VALIDATION", "Image sauvegardée dans non_detection_vrai/")
+                        // Capture manuelle : sauvegarder dans non_detection_fausse
+                        saveValidationImage(bitmap, "non_detection_fausse")
+                        Log.d("MANUAL_VALIDATION", "Image sauvegardée dans non_detection_fausse/")
                     } else {
-                        // Détection automatique : sauvegarder dans vraie
-                        saveValidationImage(bitmap, "vraie")
-                        Log.d("VALIDATION", "Image sauvegardée dans vraie/")
+                        // Détection automatique : sauvegarder dans detection_vraie
+                        saveValidationImage(bitmap, "detection_vraie")
+                        Log.d("VALIDATION", "Image sauvegardée dans detection_vraie/")
                     }
                 }
                 "no" -> {
-                    // Seulement pour la détection automatique
+                    // Seulement pour la détection automatique : sauvegarder dans fausse_alarme
                     saveValidationImage(bitmap, "fausse_alarme")
                     Log.d("VALIDATION", "Image sauvegardée dans fausse_alarme/")
                 }
@@ -883,7 +891,10 @@ class MainActivity : ComponentActivity() {
             detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
         }
         
-        // Afficher seulement les boutons Yes et Trash pour la capture manuelle
+        // Afficher seulement les boutons Yes et Trash pour la capture manuelle avec les nouveaux textes
+        yesButton.text = "Objet non détecté"
+        trashButton.text = "Trash"
+        
         yesButton.visibility = View.VISIBLE
         trashButton.visibility = View.VISIBLE
         noButton.visibility = View.GONE  // Masquer le bouton No
