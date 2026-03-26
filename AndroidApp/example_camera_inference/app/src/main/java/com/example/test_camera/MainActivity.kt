@@ -871,32 +871,66 @@ class MainActivity : ComponentActivity() {
             setShadowLayer(2f, 1f, 1f, Color.BLACK)  // Ombre plus légère
         }
         
-        // Adapter les coordonnées des bounding boxes pour l'image plus petite
+        // Adapter les coordonnées des bounding boxes pour l'image capturée
+        // Utiliser la même logique de scaling que scaleBoundingBox() pour la cohérence
         val imageWidth = rotatedBitmap.width.toFloat()
         val imageHeight = rotatedBitmap.height.toFloat()
         val previewWidth = previewView.width.toFloat()
         val previewHeight = previewView.height.toFloat()
+        val modelSize = EI_CLASSIFIER_INPUT_WIDTH.toFloat() // 320
         
-        // Calculer le ratio de scaling entre le PreviewView et l'image
-        val scaleX = imageWidth / previewWidth
-        val scaleY = imageHeight / previewHeight
+        // Calcul du scaling pour "fit shortest axis" (même logique que scaleBoundingBox)
+        val scale = minOf(previewWidth / modelSize, previewHeight / modelSize)
+        
+        // Dimensions de l'image après scaling dans le preview
+        val scaledWidth = modelSize * scale
+        val scaledHeight = modelSize * scale
+        
+        // Calcul des offsets pour le centrage dans le preview
+        val offsetX = (previewWidth - scaledWidth) / 2f
+        val offsetY = (previewHeight - scaledHeight) / 2f
+        
+        // Calcul du ratio entre l'image capturée et la zone scaled du preview
+        val imageToPreviewScaleX = scaledWidth / imageWidth
+        val imageToPreviewScaleY = scaledHeight / imageHeight
+        
+        Log.d("BOUNDING_SCALE", "Image: ${imageWidth}x${imageHeight}, Preview: ${previewWidth}x${previewHeight}")
+        Log.d("BOUNDING_SCALE", "Scale: $scale, Scaled: ${scaledWidth}x${scaledHeight}")
+        Log.d("BOUNDING_SCALE", "Offsets: ($offsetX,$offsetY), ImageToPreview: ($imageToPreviewScaleX,$imageToPreviewScaleY)")
         
         // Dessiner les bounding boxes adaptées à l'image
         currentDetections?.forEach { box ->
-            // Adapter les coordonnées pour l'image plus petite
-            val adaptedX = (box.x * scaleX).toInt()
-            val adaptedY = (box.y * scaleY).toInt()
-            val adaptedWidth = (box.width * scaleX).toInt()
-            val adaptedHeight = (box.height * scaleY).toInt()
+            // Les coordonnées de la box sont déjà en coordonnées preview (depuis scaleBoundingBox)
+            // On doit les convertir en coordonnées image capturée
             
-            val rect = Rect(adaptedX, adaptedY, adaptedX + adaptedWidth, adaptedY + adaptedHeight)
+            // 1. Retirer les offsets du preview pour obtenir les coordonnées dans la zone scaled
+            val scaledX = box.x - offsetX
+            val scaledY = box.y - offsetY
+            
+            // 2. Convertir les coordonnées preview vers image capturée
+            val adaptedX = (scaledX / imageToPreviewScaleX).toInt()
+            val adaptedY = (scaledY / imageToPreviewScaleY).toInt()
+            val adaptedWidth = (box.width / imageToPreviewScaleX).toInt()
+            val adaptedHeight = (box.height / imageToPreviewScaleY).toInt()
+            
+            // S'assurer que les coordonnées sont dans les limites de l'image
+            val clampedX = maxOf(0, minOf(adaptedX, imageWidth.toInt()))
+            val clampedY = maxOf(0, minOf(adaptedY, imageHeight.toInt()))
+            val clampedWidth = maxOf(0, minOf(adaptedWidth, imageWidth.toInt() - clampedX))
+            val clampedHeight = maxOf(0, minOf(adaptedHeight, imageHeight.toInt() - clampedY))
+            
+            Log.d("BOUNDING_SCALE", "Box preview: (${box.x},${box.y},${box.width},${box.height}) -> Image: ($clampedX,$clampedY,$clampedWidth,$clampedHeight)")
+            
+            val rect = Rect(clampedX, clampedY, clampedX + clampedWidth, clampedY + clampedHeight)
             
             // Dessiner le rectangle
             canvas.drawRect(rect, paint)
             
-            // Dessiner le label et la confiance
+            // Dessiner le label et la confiance (adapter la position du texte)
             val labelText = "${box.label} (${(box.confidence * 100).toInt()}%)"
-            canvas.drawText(labelText, adaptedX.toFloat(), (adaptedY - 15).toFloat(), textPaint)
+            val textX = clampedX.toFloat()
+            val textY = (clampedY - 10).toFloat() // Léger ajustement pour le texte plus petit
+            canvas.drawText(labelText, textX, textY, textPaint)
         }
         
         // Mettre à jour l'image avec les bounding boxes
