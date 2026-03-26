@@ -381,10 +381,19 @@ class MainActivity : ComponentActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            
+            // Configurer le PreviewView pour correspondre exactement à ce que la capture voit
+            previewView.scaleType = PreviewView.ScaleType.FILL_CENTER
+            
             val preview = Preview.Builder().build()
             preview.setSurfaceProvider(previewView.surfaceProvider)
             
-            imageCapture = ImageCapture.Builder().build()
+            // Configurer ImageCapture avec la même résolution que ImageAnalysis
+            imageCapture = ImageCapture.Builder()
+                .setTargetResolution(Size(640, 480))
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
+                
             imageAnalysis = ImageAnalysis.Builder()
                 .setTargetResolution(Size(640, 480))  // Résolution plus élevée pour meilleure détection
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -471,6 +480,33 @@ class MainActivity : ComponentActivity() {
                 displayResults(result)
             }
         }
+    }
+
+    // Fonction pour recadrer une image pour correspondre au preview (portrait)
+    private fun cropImageToPreviewPortrait(bitmap: Bitmap): Bitmap {
+        val originalWidth = bitmap.width
+        val originalHeight = bitmap.height
+        
+        Log.d("CROP_INFO", "Image originale: ${originalWidth}x${originalHeight}")
+        
+        // Le capteur est paysage, mais nous voulons un crop portrait centré
+        // Pour passer de paysage à portrait, nous recadrons la partie centrale
+        val cropSize = minOf(originalWidth, originalHeight)
+        val cropLeft = (originalWidth - cropSize) / 2
+        val cropTop = (originalHeight - cropSize) / 2
+        
+        Log.d("CROP_INFO", "Crop: ${cropSize}x${cropSize} à (${cropLeft},${cropTop})")
+        
+        // Recadrer la partie carrée centrale
+        val croppedBitmap = Bitmap.createBitmap(
+            bitmap, 
+            cropLeft, 
+            cropTop, 
+            cropSize, 
+            cropSize
+        )
+        
+        return croppedBitmap
     }
 
     // Convert ImageProxy to Bitmap
@@ -726,10 +762,17 @@ class MainActivity : ComponentActivity() {
         
         // Afficher l'image figée par-dessus le flux vidéo
         frozenBitmap?.let { bitmap ->
-            // Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
+            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
+            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
+            Log.d("VALIDATION", "Image figée recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
+            
+            // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
             val matrix = Matrix()
             matrix.postRotate(90f)
-            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
+            
+            // Libérer la mémoire du bitmap recadré
+            croppedBitmap.recycle()
             
             frozenImageView.setImageBitmap(rotatedBitmap)
             frozenImageView.visibility = View.VISIBLE
@@ -875,10 +918,17 @@ class MainActivity : ComponentActivity() {
         
         // Afficher l'image figée par-dessus le flux vidéo
         frozenBitmap?.let { bitmap ->
-            // Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
+            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
+            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
+            Log.d("MANUAL_VALIDATION", "Image figée recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
+            
+            // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
             val matrix = Matrix()
             matrix.postRotate(90f)
-            val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
+            
+            // Libérer la mémoire du bitmap recadré
+            croppedBitmap.recycle()
             
             frozenImageView.setImageBitmap(rotatedBitmap)
             frozenImageView.visibility = View.VISIBLE
@@ -919,10 +969,17 @@ class MainActivity : ComponentActivity() {
         // Utiliser la même logique que takePhoto mais avec le bitmap figé
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Tourner l'image à 90 degrés avant de sauvegarder
+                // ÉTAPE 1: Recadrer l'image pour correspondre au preview
+                val croppedBitmap = cropImageToPreviewPortrait(bitmap)
+                Log.d("VALIDATION", "Image recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
+                
+                // ÉTAPE 2: Tourner l'image à 90 degrés pour l'orientation correcte
                 val matrix = Matrix()
                 matrix.postRotate(90f)
-                val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
+                
+                // Libérer la mémoire du bitmap recadré
+                croppedBitmap.recycle()
                 
                 // Créer un fichier temporaire pour sauvegarder le bitmap
                 val tempFile = File(cacheDir, "temp_image_$name.jpg")
