@@ -760,29 +760,55 @@ class MainActivity : ComponentActivity() {
     private fun enterValidationMode() {
         isValidationMode = true
         
-        // Afficher l'image figée par-dessus le flux vidéo
-        frozenBitmap?.let { bitmap ->
-            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
-            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
-            Log.d("VALIDATION", "Image figée recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
-            
-            // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
-            val matrix = Matrix()
-            matrix.postRotate(90f)
-            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
-            
-            // Libérer la mémoire du bitmap recadré
-            croppedBitmap.recycle()
-            
-            frozenImageView.setImageBitmap(rotatedBitmap)
-            frozenImageView.visibility = View.VISIBLE
-            
-            // Afficher les bounding boxes sur l'image figée
-            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
-            
-            // Mettre à jour le compteur avec les détections sur l'image capturée
-            val capturedDetectionsCount = currentDetections?.size ?: 0
-            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+        // Capturer une nouvelle image fraîche pour garantir la dernière frame
+        imageCapture?.let { capture ->
+            capture.takePicture(
+                ContextCompat.getMainExecutor(this),
+                object : ImageCapture.OnImageCapturedCallback() {
+                    override fun onCaptureSuccess(image: ImageProxy) {
+                        // Convertir l'image capturée en Bitmap
+                        val freshBitmap = image.toBitmap()
+                        image.close()
+                        
+                        // ÉTAPE 1: Recadrer l'image pour correspondre au preview
+                        val croppedBitmap = cropImageToPreviewPortrait(freshBitmap)
+                        Log.d("VALIDATION", "Image fraîche capturée: ${freshBitmap.width}x${freshBitmap.height}")
+                        Log.d("VALIDATION", "Image fraîche recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
+                        
+                        // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
+                        val matrix = Matrix()
+                        matrix.postRotate(90f)
+                        val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
+                        
+                        // Libérer la mémoire
+                        croppedBitmap.recycle()
+                        
+                        // Mettre à jour frozenBitmap avec la nouvelle image AVANT de recycler
+                        frozenBitmap = freshBitmap
+                        
+                        runOnUiThread {
+                            frozenImageView.setImageBitmap(rotatedBitmap)
+                            frozenImageView.visibility = View.VISIBLE
+                            
+                            // Afficher les bounding boxes sur l'image fraîche
+                            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+                            
+                            // Mettre à jour le compteur avec les détections sur l'image capturée
+                            val capturedDetectionsCount = currentDetections?.size ?: 0
+                            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                        }
+                    }
+                    
+                    override fun onError(exception: ImageCaptureException) {
+                        Log.e("VALIDATION", "Erreur capture image: ${exception.message}")
+                        // En cas d'erreur, utiliser le frozenBitmap existant comme fallback
+                        useFallbackFrozenBitmap()
+                    }
+                }
+            )
+        } ?: run {
+            // Si imageCapture n'est pas disponible, utiliser frozenBitmap comme fallback
+            useFallbackFrozenBitmap()
         }
         
         // Afficher les 3 boutons pour la détection automatique avec les nouveaux textes
@@ -797,7 +823,33 @@ class MainActivity : ComponentActivity() {
         validationButtonsLayout.visibility = View.VISIBLE
         captureButton.visibility = View.GONE
         
-        Log.d("VALIDATION", "Entrée en mode validation automatique (3 boutons)")
+        Log.d("VALIDATION", "Entrée en mode validation automatique (3 boutons) - capture fraîche")
+    }
+    
+    // Fonction fallback si la capture fraîche échoue
+    private fun useFallbackFrozenBitmap() {
+        frozenBitmap?.let { bitmap ->
+            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
+            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
+            Log.d("VALIDATION", "Fallback - Image recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
+            
+            // ÉTAPE 2: Tourner l'image à 90 degrés
+            val matrix = Matrix()
+            matrix.postRotate(90f)
+            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
+            
+            // Libérer la mémoire
+            croppedBitmap.recycle()
+            
+            runOnUiThread {
+                frozenImageView.setImageBitmap(rotatedBitmap)
+                frozenImageView.visibility = View.VISIBLE
+                displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+                
+                val capturedDetectionsCount = currentDetections?.size ?: 0
+                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+            }
+        }
     }
     
     private fun displayBoundingBoxesOnFrozenImage(rotatedBitmap: Bitmap) {
@@ -809,14 +861,14 @@ class MainActivity : ComponentActivity() {
         val paint = Paint().apply {
             color = Color.RED
             style = Paint.Style.STROKE
-            strokeWidth = 4f  // Réduit de 8f à 4f
+            strokeWidth = 2f  // Réduit de 4f à 2f pour des boîtes plus fines
         }
         
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 30f  // Réduit de 60f à 30f
+            textSize = 20f  // Réduit de 30f à 20f pour un texte plus petit
             style = Paint.Style.FILL
-            setShadowLayer(4f, 2f, 2f, Color.BLACK)
+            setShadowLayer(2f, 1f, 1f, Color.BLACK)  // Ombre plus légère
         }
         
         // Adapter les coordonnées des bounding boxes pour l'image plus petite
@@ -900,16 +952,42 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleManualCapture() {
-        // Prendre une photo manuelle avec un flux différent (2 boutons)
-        frozenBitmap?.let { bitmap ->
-            // Créer des détections factices pour le mode validation (ou utiliser les détections actuelles si présentes)
-            val detectionsForValidation = currentDetections ?: emptyList()
-            currentDetections = detectionsForValidation
-            
-            // Entrer en mode validation manuelle avec 2 boutons
-            enterManualValidationMode()
-            
-            Log.d("MANUAL_CAPTURE", "Capture manuelle déclenchée")
+        // Capturer une nouvelle image fraîche pour la capture manuelle
+        imageCapture?.let { capture ->
+            capture.takePicture(
+                ContextCompat.getMainExecutor(this),
+                object : ImageCapture.OnImageCapturedCallback() {
+                    override fun onCaptureSuccess(image: ImageProxy) {
+                        // Convertir l'image capturée en Bitmap
+                        val freshBitmap = image.toBitmap()
+                        image.close()
+                        
+                        // Mettre à jour frozenBitmap avec la nouvelle image
+                        frozenBitmap = freshBitmap
+                        
+                        // Créer des détections factices pour le mode validation (ou utiliser les détections actuelles si présentes)
+                        val detectionsForValidation = currentDetections ?: emptyList()
+                        currentDetections = detectionsForValidation
+                        
+                        // Entrer en mode validation manuelle avec 2 boutons
+                        enterManualValidationMode()
+                        
+                        Log.d("MANUAL_CAPTURE", "Capture manuelle fraîche déclenchée: ${freshBitmap.width}x${freshBitmap.height}")
+                    }
+                    
+                    override fun onError(exception: ImageCaptureException) {
+                        Log.e("MANUAL_CAPTURE", "Erreur capture manuelle: ${exception.message}")
+                        // En cas d'erreur, utiliser le frozenBitmap existant comme fallback
+                        frozenBitmap?.let { bitmap ->
+                            val detectionsForValidation = currentDetections ?: emptyList()
+                            currentDetections = detectionsForValidation
+                            enterManualValidationMode()
+                        }
+                    }
+                }
+            )
+        } ?: run {
+            Log.e("MANUAL_CAPTURE", "imageCapture non disponible")
         }
     }
     
