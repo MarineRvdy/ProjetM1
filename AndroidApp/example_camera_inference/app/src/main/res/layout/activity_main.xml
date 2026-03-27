@@ -26,7 +26,7 @@
         android:orientation="vertical"
         android:background="@android:color/holo_blue_light"
         android:gravity="center"
-        android:elevation="5dp"
+        android:elevation="15dp"
         android:layout_gravity="bottom">
 
         <TextView

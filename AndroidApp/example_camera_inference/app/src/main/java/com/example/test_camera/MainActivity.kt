@@ -249,6 +249,7 @@ class MainActivity : ComponentActivity() {
     private var currentDetections: List<BoundingBox>? = null
     private var centeredFrameCount = 0  // Compteur de frames centrées
     private val REQUIRED_CENTERED_FRAMES = 5  // Nombre de frames requises pour validation (réduit de 10 à 3)
+    private var capturedRotationDegrees = 90
 
     // Fonction pour déclencher une vibration
     private fun vibrate() {
@@ -482,33 +483,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Fonction pour recadrer une image pour correspondre au preview (portrait)
-    private fun cropImageToPreviewPortrait(bitmap: Bitmap): Bitmap {
-        val originalWidth = bitmap.width
-        val originalHeight = bitmap.height
-        
-        Log.d("CROP_INFO", "Image originale: ${originalWidth}x${originalHeight}")
-        
-        // Le capteur est paysage, mais nous voulons un crop portrait centré
-        // Pour passer de paysage à portrait, nous recadrons la partie centrale
-        val cropSize = minOf(originalWidth, originalHeight)
-        val cropLeft = (originalWidth - cropSize) / 2
-        val cropTop = (originalHeight - cropSize) / 2
-        
-        Log.d("CROP_INFO", "Crop: ${cropSize}x${cropSize} à (${cropLeft},${cropTop})")
-        
-        // Recadrer la partie carrée centrale
-        val croppedBitmap = Bitmap.createBitmap(
-            bitmap, 
-            cropLeft, 
-            cropTop, 
-            cropSize, 
-            cropSize
-        )
-        
-        return croppedBitmap
+    private fun cropToMatchPreview(bitmap: Bitmap, previewW: Int, previewH: Int): Bitmap {
+        val bW = bitmap.width.toFloat()
+        val bH = bitmap.height.toFloat()
+        val pW = previewW.toFloat()
+        val pH = previewH.toFloat()
+
+        val scale = maxOf(pW / bW, pH / bH)
+
+        val cropW = (pW / scale).toInt().coerceAtMost(bitmap.width)
+        val cropH = (pH / scale).toInt().coerceAtMost(bitmap.height)
+        val cropX = ((bW - cropW) / 2).toInt().coerceAtLeast(0)
+        val cropY = ((bH - cropH) / 2).toInt().coerceAtLeast(0)
+
+        return Bitmap.createBitmap(bitmap, cropX, cropY, cropW, cropH)
     }
 
+    
     // Convert ImageProxy to Bitmap
     private fun ImageProxy.toBitmap(): Bitmap {
         val planes = this.planes
@@ -759,181 +750,75 @@ class MainActivity : ComponentActivity() {
     
     private fun enterValidationMode() {
         isValidationMode = true
-        
-        // Capturer une nouvelle image fraîche pour garantir la dernière frame
-        imageCapture?.let { capture ->
-            capture.takePicture(
-                ContextCompat.getMainExecutor(this),
-                object : ImageCapture.OnImageCapturedCallback() {
-                    override fun onCaptureSuccess(image: ImageProxy) {
-                        // Convertir l'image capturée en Bitmap
-                        val freshBitmap = image.toBitmap()
-                        image.close()
-                        
-                        // ÉTAPE 1: Recadrer l'image pour correspondre au preview
-                        val croppedBitmap = cropImageToPreviewPortrait(freshBitmap)
-                        Log.d("VALIDATION", "Image fraîche capturée: ${freshBitmap.width}x${freshBitmap.height}")
-                        Log.d("VALIDATION", "Image fraîche recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
-                        
-                        // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
-                        val matrix = Matrix()
-                        matrix.postRotate(90f)
-                        val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
-                        
-                        // Libérer la mémoire
-                        croppedBitmap.recycle()
-                        
-                        // Mettre à jour frozenBitmap avec la nouvelle image AVANT de recycler
-                        frozenBitmap = freshBitmap
-                        
-                        runOnUiThread {
-                            frozenImageView.setImageBitmap(rotatedBitmap)
-                            frozenImageView.visibility = View.VISIBLE
-                            
-                            // Afficher les bounding boxes sur l'image fraîche
-                            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
-                            
-                            // Mettre à jour le compteur avec les détections sur l'image capturée
-                            val capturedDetectionsCount = currentDetections?.size ?: 0
-                            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
-                        }
-                    }
-                    
-                    override fun onError(exception: ImageCaptureException) {
-                        Log.e("VALIDATION", "Erreur capture image: ${exception.message}")
-                        // En cas d'erreur, utiliser le frozenBitmap existant comme fallback
-                        useFallbackFrozenBitmap()
-                    }
-                }
-            )
-        } ?: run {
-            // Si imageCapture n'est pas disponible, utiliser frozenBitmap comme fallback
-            useFallbackFrozenBitmap()
+
+        val screenBitmap = previewView.bitmap
+        if (screenBitmap != null) {
+            frozenBitmap = screenBitmap
+            runOnUiThread {
+                frozenImageView.setImageBitmap(screenBitmap)
+                frozenImageView.visibility = View.VISIBLE
+                displayBoundingBoxesOnFrozenImage(screenBitmap)
+                val capturedDetectionsCount = currentDetections?.size ?: 0
+                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
+                detectionCounterTextView.visibility = View.VISIBLE
+            }
         }
-        
-        // Afficher les 3 boutons pour la détection automatique avec les nouveaux textes
+
         yesButton.text = "Détection vraie"
         noButton.text = "Détection fausse"
         trashButton.text = "Trash"
-        
         yesButton.visibility = View.VISIBLE
         noButton.visibility = View.VISIBLE
         trashButton.visibility = View.VISIBLE
-        
         validationButtonsLayout.visibility = View.VISIBLE
         captureButton.visibility = View.GONE
-        
-        Log.d("VALIDATION", "Entrée en mode validation automatique (3 boutons) - capture fraîche")
     }
     
     // Fonction fallback si la capture fraîche échoue
     private fun useFallbackFrozenBitmap() {
         frozenBitmap?.let { bitmap ->
-            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
-            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
-            Log.d("VALIDATION", "Fallback - Image recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
-            
-            // ÉTAPE 2: Tourner l'image à 90 degrés
-            val matrix = Matrix()
-            matrix.postRotate(90f)
-            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
-            
-            // Libérer la mémoire
-            croppedBitmap.recycle()
-            
             runOnUiThread {
-                frozenImageView.setImageBitmap(rotatedBitmap)
+                frozenImageView.setImageBitmap(bitmap)
                 frozenImageView.visibility = View.VISIBLE
-                displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+                displayBoundingBoxesOnFrozenImage(bitmap)
                 
                 val capturedDetectionsCount = currentDetections?.size ?: 0
                 detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
+                detectionCounterTextView.visibility = View.VISIBLE
             }
         }
     }
     
-    private fun displayBoundingBoxesOnFrozenImage(rotatedBitmap: Bitmap) {
-        // Créer un bitmap copie pour dessiner les bounding boxes
-        val mutableBitmap = rotatedBitmap.copy(Bitmap.Config.ARGB_8888, true)
+    private fun displayBoundingBoxesOnFrozenImage(bitmap: Bitmap) {
+        val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(mutableBitmap)
-        
-        // Configuration des peintures
+
         val paint = Paint().apply {
             color = Color.RED
             style = Paint.Style.STROKE
-            strokeWidth = 2f  // Réduit de 4f à 2f pour des boîtes plus fines
+            strokeWidth = 5f
         }
-        
+
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 20f  // Réduit de 30f à 20f pour un texte plus petit
+            textSize = 40f
             style = Paint.Style.FILL
-            setShadowLayer(2f, 1f, 1f, Color.BLACK)  // Ombre plus légère
+            setShadowLayer(3f, 1f, 1f, Color.BLACK)
         }
-        
-        // Adapter les coordonnées des bounding boxes pour l'image capturée
-        // Utiliser la même logique de scaling que scaleBoundingBox() pour la cohérence
-        val imageWidth = rotatedBitmap.width.toFloat()
-        val imageHeight = rotatedBitmap.height.toFloat()
-        val previewWidth = previewView.width.toFloat()
-        val previewHeight = previewView.height.toFloat()
-        val modelSize = EI_CLASSIFIER_INPUT_WIDTH.toFloat() // 320
-        
-        // Calcul du scaling pour "fit shortest axis" (même logique que scaleBoundingBox)
-        val scale = minOf(previewWidth / modelSize, previewHeight / modelSize)
-        
-        // Dimensions de l'image après scaling dans le preview
-        val scaledWidth = modelSize * scale
-        val scaledHeight = modelSize * scale
-        
-        // Calcul des offsets pour le centrage dans le preview
-        val offsetX = (previewWidth - scaledWidth) / 2f
-        val offsetY = (previewHeight - scaledHeight) / 2f
-        
-        // Calcul du ratio entre l'image capturée et la zone scaled du preview
-        val imageToPreviewScaleX = scaledWidth / imageWidth
-        val imageToPreviewScaleY = scaledHeight / imageHeight
-        
-        Log.d("BOUNDING_SCALE", "Image: ${imageWidth}x${imageHeight}, Preview: ${previewWidth}x${previewHeight}")
-        Log.d("BOUNDING_SCALE", "Scale: $scale, Scaled: ${scaledWidth}x${scaledHeight}")
-        Log.d("BOUNDING_SCALE", "Offsets: ($offsetX,$offsetY), ImageToPreview: ($imageToPreviewScaleX,$imageToPreviewScaleY)")
-        
-        // Dessiner les bounding boxes adaptées à l'image
+
         currentDetections?.forEach { box ->
-            // Les coordonnées de la box sont déjà en coordonnées preview (depuis scaleBoundingBox)
-            // On doit les convertir en coordonnées image capturée
-            
-            // 1. Retirer les offsets du preview pour obtenir les coordonnées dans la zone scaled
-            val scaledX = box.x - offsetX
-            val scaledY = box.y - offsetY
-            
-            // 2. Convertir les coordonnées preview vers image capturée
-            val adaptedX = (scaledX / imageToPreviewScaleX).toInt()
-            val adaptedY = (scaledY / imageToPreviewScaleY).toInt()
-            val adaptedWidth = (box.width / imageToPreviewScaleX).toInt()
-            val adaptedHeight = (box.height / imageToPreviewScaleY).toInt()
-            
-            // S'assurer que les coordonnées sont dans les limites de l'image
-            val clampedX = maxOf(0, minOf(adaptedX, imageWidth.toInt()))
-            val clampedY = maxOf(0, minOf(adaptedY, imageHeight.toInt()))
-            val clampedWidth = maxOf(0, minOf(adaptedWidth, imageWidth.toInt() - clampedX))
-            val clampedHeight = maxOf(0, minOf(adaptedHeight, imageHeight.toInt() - clampedY))
-            
-            Log.d("BOUNDING_SCALE", "Box preview: (${box.x},${box.y},${box.width},${box.height}) -> Image: ($clampedX,$clampedY,$clampedWidth,$clampedHeight)")
-            
-            val rect = Rect(clampedX, clampedY, clampedX + clampedWidth, clampedY + clampedHeight)
-            
-            // Dessiner le rectangle
+            val rect = Rect(box.x, box.y, box.x + box.width, box.y + box.height)
             canvas.drawRect(rect, paint)
-            
-            // Dessiner le label et la confiance (adapter la position du texte)
-            val labelText = "${box.label} (${(box.confidence * 100).toInt()}%)"
-            val textX = clampedX.toFloat()
-            val textY = (clampedY - 10).toFloat() // Léger ajustement pour le texte plus petit
-            canvas.drawText(labelText, textX, textY, textPaint)
+            canvas.drawText(
+                "${box.label} (${(box.confidence * 100).toInt()}%)",
+                box.x.toFloat(),
+                (box.y - 10).toFloat(),
+                textPaint
+            )
         }
-        
-        // Mettre à jour l'image avec les bounding boxes
+
         frozenImageView.setImageBitmap(mutableBitmap)
     }
     
@@ -944,6 +829,7 @@ class MainActivity : ComponentActivity() {
         frozenImageView.visibility = View.GONE
         validationButtonsLayout.visibility = View.GONE
         captureButton.visibility = View.VISIBLE
+        detectionCounterTextView.visibility = View.VISIBLE
         
         // Nettoyer les ressources
         frozenBitmap = null
@@ -986,42 +872,11 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun handleManualCapture() {
-        // Capturer une nouvelle image fraîche pour la capture manuelle
-        imageCapture?.let { capture ->
-            capture.takePicture(
-                ContextCompat.getMainExecutor(this),
-                object : ImageCapture.OnImageCapturedCallback() {
-                    override fun onCaptureSuccess(image: ImageProxy) {
-                        // Convertir l'image capturée en Bitmap
-                        val freshBitmap = image.toBitmap()
-                        image.close()
-                        
-                        // Mettre à jour frozenBitmap avec la nouvelle image
-                        frozenBitmap = freshBitmap
-                        
-                        // Créer des détections factices pour le mode validation (ou utiliser les détections actuelles si présentes)
-                        val detectionsForValidation = currentDetections ?: emptyList()
-                        currentDetections = detectionsForValidation
-                        
-                        // Entrer en mode validation manuelle avec 2 boutons
-                        enterManualValidationMode()
-                        
-                        Log.d("MANUAL_CAPTURE", "Capture manuelle fraîche déclenchée: ${freshBitmap.width}x${freshBitmap.height}")
-                    }
-                    
-                    override fun onError(exception: ImageCaptureException) {
-                        Log.e("MANUAL_CAPTURE", "Erreur capture manuelle: ${exception.message}")
-                        // En cas d'erreur, utiliser le frozenBitmap existant comme fallback
-                        frozenBitmap?.let { bitmap ->
-                            val detectionsForValidation = currentDetections ?: emptyList()
-                            currentDetections = detectionsForValidation
-                            enterManualValidationMode()
-                        }
-                    }
-                }
-            )
-        } ?: run {
-            Log.e("MANUAL_CAPTURE", "imageCapture non disponible")
+        val screenBitmap = previewView.bitmap
+        if (screenBitmap != null) {
+            frozenBitmap = screenBitmap
+            currentDetections = currentDetections ?: emptyList()
+            enterManualValidationMode()
         }
     }
     
@@ -1030,27 +885,17 @@ class MainActivity : ComponentActivity() {
         
         // Afficher l'image figée par-dessus le flux vidéo
         frozenBitmap?.let { bitmap ->
-            // ÉTAPE 1: Recadrer l'image pour correspondre au preview
-            val croppedBitmap = cropImageToPreviewPortrait(bitmap)
-            Log.d("MANUAL_VALIDATION", "Image figée recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
-            
-            // ÉTAPE 2: Tourner l'image à 90 degrés comme dans getByteArrayFromBitmap
-            val matrix = Matrix()
-            matrix.postRotate(90f)
-            val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
-            
-            // Libérer la mémoire du bitmap recadré
-            croppedBitmap.recycle()
-            
-            frozenImageView.setImageBitmap(rotatedBitmap)
+            frozenImageView.setImageBitmap(bitmap)
             frozenImageView.visibility = View.VISIBLE
             
             // Afficher les bounding boxes sur l'image figée
-            displayBoundingBoxesOnFrozenImage(rotatedBitmap)
+            displayBoundingBoxesOnFrozenImage(bitmap)
             
             // Mettre à jour le compteur avec les détections sur l'image capturée
             val capturedDetectionsCount = currentDetections?.size ?: 0
             detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+            // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
+            detectionCounterTextView.visibility = View.VISIBLE
         }
         
         // Afficher seulement les boutons Yes et Trash pour la capture manuelle avec les nouveaux textes
@@ -1070,68 +915,40 @@ class MainActivity : ComponentActivity() {
     private fun saveValidationImage(bitmap: Bitmap, subfolder: String) {
         val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
             .format(System.currentTimeMillis())
-        
+
         val contentValues = android.content.ContentValues().apply {
             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Detection_$name")
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, 
-                 Environment.DIRECTORY_PICTURES + "/TrividaeDetection/$subfolder")
+            put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/TrividaeDetection/$subfolder")
         }
 
-        // Utiliser la même logique que takePhoto mais avec le bitmap figé
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // ÉTAPE 1: Recadrer l'image pour correspondre au preview
-                val croppedBitmap = cropImageToPreviewPortrait(bitmap)
-                Log.d("VALIDATION", "Image recadrée: ${croppedBitmap.width}x${croppedBitmap.height}")
-                
-                // ÉTAPE 2: Tourner l'image à 90 degrés pour l'orientation correcte
-                val matrix = Matrix()
-                matrix.postRotate(90f)
-                val rotatedBitmap = Bitmap.createBitmap(croppedBitmap, 0, 0, croppedBitmap.width, croppedBitmap.height, matrix, true)
-                
-                // Libérer la mémoire du bitmap recadré
-                croppedBitmap.recycle()
-                
-                // Créer un fichier temporaire pour sauvegarder le bitmap
                 val tempFile = File(cacheDir, "temp_image_$name.jpg")
                 val fos = FileOutputStream(tempFile)
-                rotatedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
                 fos.close()
-                
-                // Créer l'URI de destination
+
                 val uri = contentResolver.insert(
                     android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     contentValues
                 )
-                
                 if (uri != null) {
-                    // Copier vers MediaStore
                     val inputStream = tempFile.inputStream()
                     val outputStream = contentResolver.openOutputStream(uri)
-                    inputStream.use { input ->
-                        outputStream?.use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                    
-                    // Nettoyer
+                    inputStream.use { input -> outputStream?.use { output -> input.copyTo(output) } }
                     tempFile.delete()
-                    rotatedBitmap.recycle() // Libérer la mémoire
-                    
-                    Log.d("VALIDATION", "Image sauvegardée avec succès dans: $subfolder")
                     runOnUiThread {
                         Toast.makeText(this@MainActivity, "Image sauvegardée dans: $subfolder", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Log.e("VALIDATION", "Impossible de créer l'URI pour la sauvegarde")
                     tempFile.delete()
-                    rotatedBitmap.recycle()
                 }
             } catch (e: Exception) {
                 Log.e("VALIDATION", "Erreur lors de la sauvegarde: ${e.message}", e)
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Erreur lors de la sauvegarde: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Erreur: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         }
