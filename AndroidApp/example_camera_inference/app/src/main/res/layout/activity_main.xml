@@ -18,6 +18,71 @@
         android:background="@android:color/transparent"
         android:visibility="gone"/>
 
+    <!-- Top Bar with Logo, Title and Control Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:orientation="horizontal"
+        android:background="@android:color/white"
+        android:elevation="20dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <!-- School Logo -->
+        <ImageView
+            android:id="@+id/schoolLogoImageView"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/school_logo"
+            android:scaleType="fitCenter"
+            android:contentDescription="Logo de l'école"/>
+
+        <!-- Title (centered) -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Détection Triviidae"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"/>
+
+        <!-- Sound Toggle Button -->
+        <ImageView
+            android:id="@+id/soundToggleButton"
+            android:layout_width="35dp"
+            android:layout_height="35dp"
+            android:src="@drawable/ic_sound_on"
+            android:scaleType="fitCenter"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Activer/Désactiver le son"
+            android:layout_marginEnd="8dp"/>
+
+        <!-- Vibration Toggle Button -->
+        <ImageView
+            android:id="@+id/vibrationToggleButton"
+            android:layout_width="35dp"
+            android:layout_height="35dp"
+            android:src="@drawable/ic_vibration_on"
+            android:scaleType="fitCenter"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Activer/Désactiver la vibration"
+            android:layout_marginEnd="8dp"/>
+
+        <!-- Flash Toggle Button -->
+        <ImageView
+            android:id="@+id/flashToggleButton"
+            android:layout_width="35dp"
+            android:layout_height="35dp"
+            android:src="@drawable/ic_flash_off"
+            android:scaleType="fitCenter"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Activer/Désactiver le flash"/>
+
+    </LinearLayout>
+
     <!-- Result Display Frame -->
     <LinearLayout
         android:layout_width="match_parent"

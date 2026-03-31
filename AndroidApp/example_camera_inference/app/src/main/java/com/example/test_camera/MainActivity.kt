@@ -1,48 +1,53 @@
 package com.example.test_camera
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Rect
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
 import android.os.Environment
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.util.AttributeSet
 import android.util.Log
-import android.Manifest
-import android.widget.TextView
+import android.util.Size
+import android.view.View
 import android.widget.Button
-import android.widget.Toast
-import android.widget.LinearLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import android.util.Size
 import androidx.lifecycle.lifecycleScope
 import com.example.test_camera.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import android.content.Context
-import android.content.pm.PackageManager
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Rect
-import android.util.AttributeSet
-import android.view.View
-import androidx.core.app.ActivityCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.*
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.media.AudioManager
-import android.media.ToneGenerator
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 data class InferenceResult(
     val classification: Map<String, Float>?,   // Classification labels and values
@@ -251,21 +256,34 @@ class MainActivity : ComponentActivity() {
     private val REQUIRED_CENTERED_FRAMES = 5  // Nombre de frames requises pour validation (réduit de 10 à 3)
     private var capturedRotationDegrees = 90
 
+    // Variables pour les contrôles de la barre supérieure
+    private lateinit var soundToggleButton: ImageView
+    private lateinit var vibrationToggleButton: ImageView
+    private lateinit var flashToggleButton: ImageView
+    private var isSoundEnabled = true
+    private var isVibrationEnabled = true
+    private var isFlashEnabled = false
+    private var camera: Camera? = null
+
     // Fonction pour déclencher une vibration
     private fun vibrate() {
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator.vibrate(200)
+        if (isVibrationEnabled) {
+            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(200)
+            }
         }
     }
 
     // Fonction pour jouer un son de détection
     private fun playDetectionSound() {
-        val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-        toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+        if (isSoundEnabled) {
+            val toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+            toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
+        }
     }
 
     // Fonction combinée pour alerte vibration + son
@@ -332,6 +350,11 @@ class MainActivity : ComponentActivity() {
         trashButton = findViewById(R.id.trashButton) // Trash button
         frozenImageView = findViewById(R.id.frozenImageView) // Frozen image display
 
+        // Initialiser les contrôles de la barre supérieure
+        soundToggleButton = findViewById(R.id.soundToggleButton)
+        vibrationToggleButton = findViewById(R.id.vibrationToggleButton)
+        flashToggleButton = findViewById(R.id.flashToggleButton)
+
         // Mettre à jour les ratios d'écran pour les bounding boxes
         updateScreenDimensions()
         
@@ -375,6 +398,19 @@ class MainActivity : ComponentActivity() {
             handleValidationChoice("trash")
         }
 
+        // Listeners pour les boutons de contrôle
+        soundToggleButton.setOnClickListener {
+            toggleSound()
+        }
+        
+        vibrationToggleButton.setOnClickListener {
+            toggleVibration()
+        }
+        
+        flashToggleButton.setOnClickListener {
+            toggleFlash()
+        }
+
     }
 
     private fun startCamera() {
@@ -405,7 +441,7 @@ class MainActivity : ComponentActivity() {
                 processImage(imageProxy)
             }
 
-            cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis, imageCapture)
+            camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis, imageCapture)
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -957,5 +993,53 @@ class MainActivity : ComponentActivity() {
     private fun takePhoto() {
         // Utiliser le flux de validation au lieu de la sauvegarde simple
         handleManualCapture()
+    }
+
+    // Fonctions pour les contrôles de la barre supérieure
+    private fun toggleSound() {
+        isSoundEnabled = !isSoundEnabled
+        soundToggleButton.setImageResource(
+            if (isSoundEnabled) R.drawable.ic_sound_on else R.drawable.ic_sound_off
+        )
+        Log.d("CONTROLS", "Sound ${if (isSoundEnabled) "enabled" else "disabled"}")
+    }
+
+    private fun toggleVibration() {
+        isVibrationEnabled = !isVibrationEnabled
+        vibrationToggleButton.setImageResource(
+            if (isVibrationEnabled) R.drawable.ic_vibration_on else R.drawable.ic_vibration_off
+        )
+        Log.d("CONTROLS", "Vibration ${if (isVibrationEnabled) "enabled" else "disabled"}")
+    }
+
+    private fun toggleFlash() {
+        if (camera == null) {
+            Toast.makeText(this, "Camera not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        try {
+            if (isFlashEnabled) {
+                // Désactiver le flash
+                camera?.cameraControl?.enableTorch(false)
+                isFlashEnabled = false
+                Log.d("FLASH", "Flash désactivé")
+            } else {
+                // Activer le flash
+                camera?.cameraControl?.enableTorch(true)
+                isFlashEnabled = true
+                Log.d("FLASH", "Flash activé")
+            }
+            // Mettre à jour l'image du bouton
+            flashToggleButton.setImageResource(
+                if (isFlashEnabled) R.drawable.ic_flash_on else R.drawable.ic_flash_off
+            )
+        } catch (e: Exception) {
+            Log.e("FLASH", "Erreur lors du contrôle du flash: ${e.message}", e)
+            Toast.makeText(this, "Flash not available on this device", Toast.LENGTH_SHORT).show()
+            // En cas d'erreur, réinitialiser l'état du bouton
+            isFlashEnabled = false
+            flashToggleButton.setImageResource(R.drawable.ic_flash_off)
+        }
     }
 }
