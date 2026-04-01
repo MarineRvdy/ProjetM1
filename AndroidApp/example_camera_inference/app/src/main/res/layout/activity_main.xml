@@ -21,90 +21,95 @@
     <!-- Top Bar with Logo, Title and Control Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:orientation="horizontal"
-        android:background="@android:color/white"
-        android:elevation="20dp"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp">
-
-        <!-- School Logo -->
-        <ImageView
-            android:id="@+id/schoolLogoImageView"
-            android:layout_width="60dp"
-            android:layout_height="60dp"
-            android:src="@drawable/school_logo"
-            android:scaleType="fitCenter"
-            android:contentDescription="Logo de l'école"/>
-
-        <!-- Title (centered) -->
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Détection Triviidae"
-            android:textColor="@android:color/black"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:gravity="center"/>
-
-        <!-- Sound Toggle Button -->
-        <ImageView
-            android:id="@+id/soundToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:src="@drawable/ic_sound_on"
-            android:scaleType="fitCenter"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Activer/Désactiver le son"
-            android:layout_marginEnd="8dp"/>
-
-        <!-- Vibration Toggle Button -->
-        <ImageView
-            android:id="@+id/vibrationToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:src="@drawable/ic_vibration_on"
-            android:scaleType="fitCenter"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Activer/Désactiver la vibration"
-            android:layout_marginEnd="8dp"/>
-
-        <!-- Flash Toggle Button -->
-        <ImageView
-            android:id="@+id/flashToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:src="@drawable/ic_flash_off"
-            android:scaleType="fitCenter"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Activer/Désactiver le flash"/>
-
-    </LinearLayout>
-
-    <!-- Result Display Frame -->
-    <LinearLayout
-        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp"
         android:orientation="vertical"
-        android:background="@android:color/holo_blue_light"
-        android:gravity="center"
-        android:elevation="15dp"
-        android:layout_gravity="bottom">
+        android:background="@android:color/white"
+        android:elevation="20dp">
 
-        <TextView
-            android:id="@+id/detectionCounterTextView"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Détections: 0"
-            android:textColor="@android:color/white"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:padding="4dp"/>
+        <!-- First Row: Logo, Title and Control Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <!-- School Logo -->
+            <ImageView
+                android:id="@+id/schoolLogoImageView"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:src="@drawable/school_logo"
+                android:scaleType="fitCenter"
+                android:contentDescription="Logo de l'école"/>
+
+            <!-- Title and Detection Counter Container -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <!-- Title -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Détection Triviidae"
+                    android:textColor="@android:color/black"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:gravity="center"/>
+
+                <!-- Detection Counter -->
+                <TextView
+                    android:id="@+id/detectionCounterTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nombre(s): 0"
+                    android:textColor="@android:color/black"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="2dp"/>
 
             </LinearLayout>
+
+            <!-- Sound Toggle Button -->
+            <ImageView
+                android:id="@+id/soundToggleButton"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:src="@drawable/ic_sound_on"
+                android:scaleType="fitCenter"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Activer/Désactiver le son"
+                android:layout_marginEnd="8dp"/>
+
+            <!-- Vibration Toggle Button -->
+            <ImageView
+                android:id="@+id/vibrationToggleButton"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:src="@drawable/ic_vibration_on"
+                android:scaleType="fitCenter"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Activer/Désactiver la vibration"
+                android:layout_marginEnd="8dp"/>
+
+            <!-- Flash Toggle Button -->
+            <ImageView
+                android:id="@+id/flashToggleButton"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:src="@drawable/ic_flash_off"
+                android:scaleType="fitCenter"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Activer/Désactiver le flash"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
 
     <!-- Validation Buttons (Hidden by Default) -->
     <LinearLayout
@@ -115,10 +120,9 @@
         android:orientation="horizontal"
         android:gravity="center"
         android:padding="16dp"
-        android:background="@android:color/background_dark"
+        android:background="@android:color/white"
         android:visibility="gone"
-        android:elevation="10dp"
-        android:layout_marginBottom="80dp">
+        android:elevation="15dp">
 
         <Button
             android:id="@+id/yesButton"
@@ -127,10 +131,10 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:text="Yes"
-            android:textSize="16sp"
+            android:textSize="12sp"
             android:background="@android:color/holo_green_dark"
             android:textColor="@android:color/white"
-            android:padding="12dp"/>
+            android:padding="8dp"/>
 
         <Button
             android:id="@+id/noButton"
@@ -140,10 +144,10 @@
             android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp"
             android:text="No"
-            android:textSize="16sp"
+            android:textSize="12sp"
             android:background="@android:color/holo_orange_dark"
             android:textColor="@android:color/white"
-            android:padding="12dp"/>
+            android:padding="8dp"/>
 
         <Button
             android:id="@+id/trashButton"
@@ -152,10 +156,10 @@
             android:layout_weight="1"
             android:layout_marginStart="8dp"
             android:text="Trash"
-            android:textSize="16sp"
+            android:textSize="12sp"
             android:background="@android:color/holo_red_dark"
             android:textColor="@android:color/white"
-            android:padding="12dp"/>
+            android:padding="8dp"/>
 
     </LinearLayout>
 
@@ -169,17 +173,16 @@
         android:elevation="5dp"/>
 
     <!-- Capture Photo Button -->
-    <Button
+    <ImageView
         android:id="@+id/captureButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
         android:layout_gravity="center|bottom"
         android:layout_marginBottom="80dp"
-        android:text="Capturer"
-        android:textSize="16sp"
-        android:background="@android:color/holo_blue_bright"
-        android:textColor="@android:color/white"
-        android:padding="12dp"
+        android:src="@drawable/btn_capture"
+        android:scaleType="fitCenter"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Capturer une photo"
         android:elevation="8dp"/>
 
 </FrameLayout>

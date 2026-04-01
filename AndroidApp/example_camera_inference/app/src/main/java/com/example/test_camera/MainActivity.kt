@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var previewView: PreviewView
     private lateinit var boundingBoxOverlay: BoundingBoxOverlay
-    private lateinit var captureButton: Button
+    private lateinit var captureButton: ImageView
     private lateinit var detectionCounterTextView: TextView
     private lateinit var validationButtonsLayout: LinearLayout
     private lateinit var yesButton: Button
@@ -585,7 +585,7 @@ class MainActivity : ComponentActivity() {
     private fun displayResults(result: InferenceResult?) {
         if (result == null) {
             Log.e("MainActivity", "Error running inference")
-            detectionCounterTextView.text = "Détections: 0"
+            detectionCounterTextView.text = "Nombre(s): 0"
             boundingBoxOverlay.visibility = View.GONE
         } else
         {
@@ -668,10 +668,10 @@ class MainActivity : ComponentActivity() {
             if (isValidationMode) {
                 // Mode validation : afficher le nombre de détections sur l'image capturée
                 val capturedDetectionsCount = currentDetections?.size ?: 0
-                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                detectionCounterTextView.text = "Nombre(s): $capturedDetectionsCount"
             } else {
                 // Mode temps réel : afficher le nombre de détections actuelles
-                detectionCounterTextView.text = "Détections: $currentDetectionCount"
+                detectionCounterTextView.text = "Nombre(s): $currentDetectionCount"
             }
         }
     }
@@ -795,7 +795,7 @@ class MainActivity : ComponentActivity() {
                 frozenImageView.visibility = View.VISIBLE
                 displayBoundingBoxesOnFrozenImage(screenBitmap)
                 val capturedDetectionsCount = currentDetections?.size ?: 0
-                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                detectionCounterTextView.text = "Nombre(s): $capturedDetectionsCount"
                 // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
                 detectionCounterTextView.visibility = View.VISIBLE
             }
@@ -820,7 +820,7 @@ class MainActivity : ComponentActivity() {
                 displayBoundingBoxesOnFrozenImage(bitmap)
                 
                 val capturedDetectionsCount = currentDetections?.size ?: 0
-                detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+                detectionCounterTextView.text = "Nombre(s): $capturedDetectionsCount"
                 // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
                 detectionCounterTextView.visibility = View.VISIBLE
             }
@@ -929,7 +929,7 @@ class MainActivity : ComponentActivity() {
             
             // Mettre à jour le compteur avec les détections sur l'image capturée
             val capturedDetectionsCount = currentDetections?.size ?: 0
-            detectionCounterTextView.text = "Détections: $capturedDetectionsCount"
+            detectionCounterTextView.text = "Nombre(s): $capturedDetectionsCount"
             // Garder la barre bleue visible pour montrer les infos de l'image sauvegardée
             detectionCounterTextView.visibility = View.VISIBLE
         }
