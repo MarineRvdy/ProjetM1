@@ -32,8 +32,8 @@
         <!-- School Logo -->
         <ImageView
             android:id="@+id/schoolLogoImageView"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:src="@drawable/school_logo"
             android:scaleType="fitCenter"
             android:contentDescription="Logo de l'école"/>
@@ -52,8 +52,8 @@
         <!-- Sound Toggle Button -->
         <ImageView
             android:id="@+id/soundToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
             android:src="@drawable/ic_sound_on"
             android:scaleType="fitCenter"
             android:background="?android:attr/selectableItemBackgroundBorderless"
@@ -63,8 +63,8 @@
         <!-- Vibration Toggle Button -->
         <ImageView
             android:id="@+id/vibrationToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
             android:src="@drawable/ic_vibration_on"
             android:scaleType="fitCenter"
             android:background="?android:attr/selectableItemBackgroundBorderless"
@@ -74,8 +74,8 @@
         <!-- Flash Toggle Button -->
         <ImageView
             android:id="@+id/flashToggleButton"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
             android:src="@drawable/ic_flash_off"
             android:scaleType="fitCenter"
             android:background="?android:attr/selectableItemBackgroundBorderless"
