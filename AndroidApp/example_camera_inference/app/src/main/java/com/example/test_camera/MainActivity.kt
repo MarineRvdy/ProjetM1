@@ -418,19 +418,10 @@ class MainActivity : ComponentActivity() {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-            
-            // Configurer le PreviewView pour correspondre exactement à ce que la capture voit
-            previewView.scaleType = PreviewView.ScaleType.FILL_CENTER
-            
             val preview = Preview.Builder().build()
             preview.setSurfaceProvider(previewView.surfaceProvider)
             
-            // Configurer ImageCapture avec la même résolution que ImageAnalysis
-            imageCapture = ImageCapture.Builder()
-                .setTargetResolution(Size(640, 480))
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                .build()
-                
+            imageCapture = ImageCapture.Builder().build()
             imageAnalysis = ImageAnalysis.Builder()
                 .setTargetResolution(Size(640, 480))  // Résolution plus élevée pour meilleure détection
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
