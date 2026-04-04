@@ -49,6 +49,7 @@ import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import android.media.ExifInterface
+import android.view.KeyEvent
 
 data class InferenceResult(
     val classification: Map<String, Float>?,   // Classification labels and values
@@ -250,6 +251,7 @@ class MainActivity : ComponentActivity() {
     
     // Variables pour le flux de validation
     private var isValidationMode = false
+    private var isManualValidationMode = false // Pour distinguer capture manuelle vs validation IA
     private var isCenteringMode = false  // Nouveau mode pour le centrage
     private var frozenBitmap: Bitmap? = null
     private var currentDetections: List<BoundingBox>? = null
@@ -265,6 +267,13 @@ class MainActivity : ComponentActivity() {
     private var isVibrationEnabled = true
     private var isFlashEnabled = false
     private var camera: Camera? = null
+    
+    // Variables pour la télécommande bluetooth
+    private var lastRemoteCode = -1
+    private var lastRemoteTime = 0L
+    private val CLICK_TIMEOUT = 800L // 800ms pour toute la séquence de clics
+    private var clickCount = 0 // Compteur de clics pour triple-clic
+    private var clickTimerJob: kotlinx.coroutines.Job? = null // Pour gérer le timer
 
     // Fonction pour déclencher une vibration
     private fun vibrate() {
@@ -412,6 +421,172 @@ class MainActivity : ComponentActivity() {
             toggleFlash()
         }
 
+    }
+    
+    // Gestion des boutons physiques de la télécommande bluetooth
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        // Debug : afficher toutes les touches pressées pour identifier la télécommande
+        Log.d("REMOTE_DEBUG", "Touche pressée: keyCode=$keyCode, event=${event.keyCode}, action=${event.action}")
+        
+        // Gérer le bouton principal qui alterne entre 24 (VOL+) et 25 (VOL-)
+        if (keyCode == 24 || keyCode == 25) {
+            val currentTime = System.currentTimeMillis()
+            
+            if (isValidationMode) {
+                // Logique différente selon le mode de validation
+                if (isManualValidationMode) {
+                    // Mode manuel : seulement simple clic (YES) et triple-clic (TRASH)
+                    if (currentTime - lastRemoteTime < CLICK_TIMEOUT) {
+                        // Clic rapide dans la même séquence
+                        clickCount++
+                        Log.d("REMOTE_DEBUG", "Clic rapide (mode manuel): clickCount=$clickCount")
+                        
+                        // Annuler le timer précédent
+                        clickTimerJob?.cancel()
+                        
+                        if (clickCount == 3) {
+                            // Triple-clic détecté → TRASH immédiat
+                            handleValidationChoice("trash")
+                            Log.d("REMOTE_DEBUG", "Triple-clic (mode manuel): TRASH")
+                            resetClickState()
+                            return true
+                        }
+                        // En mode manuel, on ignore le double-clic (pas d'action NO)
+                    } else {
+                        // Nouvelle séquence de clics
+                        resetClickState()
+                        clickCount = 1
+                        lastRemoteTime = currentTime
+                        lastRemoteCode = keyCode
+                        Log.d("REMOTE_DEBUG", "Nouvelle séquence (mode manuel): clickCount=$clickCount")
+                    }
+                    
+                    // Démarrer un timer pour toute la séquence
+                    clickTimerJob = lifecycleScope.launch {
+                        kotlinx.coroutines.delay(CLICK_TIMEOUT)
+                        when (clickCount) {
+                            1 -> {
+                                handleValidationChoice("yes")
+                                Log.d("REMOTE_DEBUG", "Timeout (mode manuel): YES exécuté")
+                            }
+                            2 -> {
+                                // En mode manuel, le double-clic ne fait rien (on attends le triple-clic)
+                                Log.d("REMOTE_DEBUG", "Timeout (mode manuel): double-clic ignoré")
+                            }
+                            else -> {
+                                Log.d("REMOTE_DEBUG", "Timeout (mode manuel): aucune action (clickCount=$clickCount)")
+                            }
+                        }
+                        resetClickState()
+                    }
+                } else {
+                    // Mode validation IA : simple clic = YES, double-clic = NO, triple-clic = TRASH
+                    if (currentTime - lastRemoteTime < CLICK_TIMEOUT) {
+                        // Clic rapide dans la même séquence
+                        clickCount++
+                        Log.d("REMOTE_DEBUG", "Clic rapide (mode IA): clickCount=$clickCount")
+                        
+                        // Annuler le timer précédent
+                        clickTimerJob?.cancel()
+                        
+                        if (clickCount == 3) {
+                            // Triple-clic détecté → TRASH immédiat
+                            handleValidationChoice("trash")
+                            Log.d("REMOTE_DEBUG", "Triple-clic (mode IA): TRASH")
+                            resetClickState()
+                            return true
+                        }
+                    } else {
+                        // Nouvelle séquence de clics
+                        resetClickState()
+                        clickCount = 1
+                        lastRemoteTime = currentTime
+                        lastRemoteCode = keyCode
+                        Log.d("REMOTE_DEBUG", "Nouvelle séquence (mode IA): clickCount=$clickCount")
+                    }
+                    
+                    // Démarrer un timer pour toute la séquence
+                    clickTimerJob = lifecycleScope.launch {
+                        kotlinx.coroutines.delay(CLICK_TIMEOUT)
+                        when (clickCount) {
+                            1 -> {
+                                handleValidationChoice("yes")
+                                Log.d("REMOTE_DEBUG", "Timeout (mode IA): YES exécuté")
+                            }
+                            2 -> {
+                                handleValidationChoice("no")
+                                Log.d("REMOTE_DEBUG", "Timeout (mode IA): NO exécuté")
+                            }
+                            else -> {
+                                Log.d("REMOTE_DEBUG", "Timeout (mode IA): aucune action (clickCount=$clickCount)")
+                            }
+                        }
+                        resetClickState()
+                    }
+                }
+                
+            } else {
+                // En mode normal : capture manuelle
+                takePhoto()
+                Log.d("REMOTE_DEBUG", "Action: Capture manuelle")
+                resetClickState()
+            }
+            return true
+        }
+        
+        // Gérer les autres touches en mode validation (touches standards)
+        if (isValidationMode) {
+            when (keyCode) {
+                // Bouton principal (généralement KEYCODE_BUTTON_A ou KEYCODE_ENTER)
+                KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_SPACE -> {
+                    handleValidationChoice("yes")
+                    return true
+                }
+                // Boutons de direction - peuvent être utilisés pour No/Trash
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_BUTTON_B -> {
+                    if (!isManualValidationMode) {
+                        handleValidationChoice("no") 
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_BUTTON_C -> {
+                    handleValidationChoice("trash")
+                    return true
+                }
+                // Bouton camera pour capture manuelle
+                KeyEvent.KEYCODE_CAMERA -> {
+                    if (!isValidationMode) {
+                        takePhoto()
+                    }
+                    return true
+                }
+            }
+        } else {
+            // En mode normal, certains boutons peuvent déclencher des actions
+            when (keyCode) {
+                KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_BUTTON_A -> {
+                    takePhoto()
+                    return true
+                }
+                // Les touches de direction peuvent être utilisées pour autre chose si besoin
+                KeyEvent.KEYCODE_DPAD_CENTER -> {
+                    // Action centrale : peut servir à basculer un mode
+                    return true
+                }
+            }
+        }
+        
+        return super.onKeyDown(keyCode, event)
+    }
+    
+    // Fonction pour réinitialiser l'état des clics
+    private fun resetClickState() {
+        clickCount = 0
+        lastRemoteTime = 0L
+        lastRemoteCode = -1
+        clickTimerJob?.cancel()
+        clickTimerJob = null
+        Log.d("REMOTE_DEBUG", "État des clics réinitialisé")
     }
 
     private fun startCamera() {
@@ -778,6 +953,7 @@ class MainActivity : ComponentActivity() {
     
     private fun enterValidationMode() {
         isValidationMode = true
+        isManualValidationMode = false // Mode validation IA
 
         val screenBitmap = previewView.bitmap
         if (screenBitmap != null) {
@@ -852,6 +1028,10 @@ class MainActivity : ComponentActivity() {
     
     private fun exitValidationMode() {
         isValidationMode = false
+        isManualValidationMode = false // Réinitialiser aussi le mode manuel
+        
+        // Réinitialiser les variables de télécommande
+        resetClickState()
         
         // Masquer l'image figée et les boutons de validation
         frozenImageView.visibility = View.GONE
@@ -912,6 +1092,7 @@ class MainActivity : ComponentActivity() {
     
     private fun enterManualValidationMode() {
         isValidationMode = true
+        isManualValidationMode = true // Mode validation manuelle
         
         // Afficher l'image figée par-dessus le flux vidéo
         frozenBitmap?.let { bitmap ->
