@@ -48,6 +48,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.media.ExifInterface
 
 data class InferenceResult(
     val classification: Map<String, Float>?,   // Classification labels and values
@@ -872,20 +873,22 @@ class MainActivity : ComponentActivity() {
                 "yes" -> {
                     // Vérifier si c'est une capture manuelle ou automatique
                     val isManualCapture = (noButton.visibility == View.GONE)
+                    val detectionCount = currentDetections?.size ?: 0
                     
                     if (isManualCapture) {
                         // Capture manuelle : sauvegarder dans non_detection_fausse
-                        saveValidationImage(bitmap, "non_detection_fausse")
+                        saveValidationImage(bitmap, "non_detection_fausse", detectionCount)
                         Log.d("MANUAL_VALIDATION", "Image sauvegardée dans non_detection_fausse/")
                     } else {
                         // Détection automatique : sauvegarder dans detection_vraie
-                        saveValidationImage(bitmap, "detection_vraie")
+                        saveValidationImage(bitmap, "detection_vraie", detectionCount)
                         Log.d("VALIDATION", "Image sauvegardée dans detection_vraie/")
                     }
                 }
                 "no" -> {
                     // Seulement pour la détection automatique : sauvegarder dans fausse_alarme
-                    saveValidationImage(bitmap, "fausse_alarme")
+                    val detectionCount = currentDetections?.size ?: 0
+                    saveValidationImage(bitmap, "fausse_alarme", detectionCount)
                     Log.d("VALIDATION", "Image sauvegardée dans fausse_alarme/")
                 }
                 "trash" -> {
@@ -939,7 +942,7 @@ class MainActivity : ComponentActivity() {
         Log.d("MANUAL_VALIDATION", "Entrée en mode validation manuelle (2 boutons)")
     }
     
-    private fun saveValidationImage(bitmap: Bitmap, subfolder: String) {
+    private fun saveValidationImage(bitmap: Bitmap, subfolder: String, detectionCount: Int = 0) {
         val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
             .format(System.currentTimeMillis())
 
@@ -956,6 +959,21 @@ class MainActivity : ComponentActivity() {
                 val fos = FileOutputStream(tempFile)
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
                 fos.close()
+                
+                // Ajouter les métadonnées EXIF si c'est une détection vraie
+                if (subfolder == "detection_vraie") {
+                    Log.d("METADATA_DEBUG", "detectionCount passé en paramètre: $detectionCount")
+                    
+                    try {
+                        val exif = ExifInterface(tempFile.absolutePath)
+                        exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, "Détections: $detectionCount")
+                        exif.setAttribute("UserComment", "Nombre de détections: $detectionCount")
+                        exif.saveAttributes()
+                        Log.d("METADATA", "Métadonnées ajoutées: $detectionCount détections")
+                    } catch (e: Exception) {
+                        Log.e("METADATA", "Erreur lors de l'ajout des métadonnées: ${e.message}")
+                    }
+                }
 
                 val uri = contentResolver.insert(
                     android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
