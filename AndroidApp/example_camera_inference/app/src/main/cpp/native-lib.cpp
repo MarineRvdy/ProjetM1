@@ -45,9 +45,9 @@ jbyte* byteData = nullptr;
 #define CAMERA_INPUT_HEIGHT 480
 #define PIXEL_NUM 3
 
-// Variables globales pour les ratios d'écran dynamiques
-float g_x_ratio = 1080.0f / (float)EI_CLASSIFIER_INPUT_WIDTH;
-float g_y_ratio = 2400.0f / (float)EI_CLASSIFIER_INPUT_HEIGHT;
+// Variables globales pour les ratios d'écran (plus utilisées)
+// float g_x_ratio = 1080.0f / (float)EI_CLASSIFIER_INPUT_WIDTH;
+// float g_y_ratio = 2400.0f / (float)EI_CLASSIFIER_INPUT_HEIGHT;
 
 static int ei_camera_get_data(size_t offset, size_t length, float *out_ptr)
 {
@@ -161,14 +161,22 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
         ei_impulse_result_bounding_box_t bb = result.bounding_boxes[i];
         if (bb.value == 0) continue;
         
-        // Utiliser les ratios dynamiques mis à jour depuis Kotlin
-        float x = (float)bb.x * g_x_ratio;
-        float y = (float)bb.y * g_y_ratio;
-        float width = (float)bb.width * g_x_ratio;
-        float height = (float)bb.height * g_y_ratio;
+        // Transmettre les bounding boxes brutes du modèle (320x320) sans scaling
+        float x = (float)bb.x;
+        float y = (float)bb.y;
+        float width = (float)bb.width;
+        float height = (float)bb.height;
 
-        __android_log_print(ANDROID_LOG_INFO, "MAIN", "BB: x=%f, y=%f, w=%f, h=%f (ratios: x=%f, y=%f)", 
-                            x, y, width, height, g_x_ratio, g_y_ratio);
+        __android_log_print(ANDROID_LOG_INFO, "MAIN", "BB raw: x=%.2f, y=%.2f, w=%.2f, h=%.2f (model: %dx%d)", 
+                            x, y, width, height, EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT);
+        
+        // Log détaillé pour debug FOMO - vérifier le format des coordonnées
+        __android_log_print(ANDROID_LOG_INFO, "FOMO_DEBUG", "Label: %s, Confidence: %.3f, Coords: (%.2f,%.2f,%.2f,%.2f)", 
+                            bb.label, bb.value, x, y, width, height);
+        
+        // Vérifier si les coordonnées semblent être en format grille (petites valeurs) ou déjà à l'échelle
+        bool isGridFormat = (x < 20.0f && y < 20.0f && width < 20.0f && height < 20.0f);
+        __android_log_print(ANDROID_LOG_INFO, "FOMO_DEBUG", "Format grille: %s", isGridFormat ? "OUI" : "NON");
 
         jstring label = env->NewStringUTF(bb.label);
         jobject boundingBoxObj = env->NewObject(boundingBoxClass,
@@ -214,6 +222,7 @@ Java_com_example_test_1camera_MainActivity_passToCpp(
     return inferenceResult;
 }
 
+// Fonction de mise à jour des ratios d'écran (plus utilisée)
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_test_1camera_MainActivity_updateScreenRatios(
         JNIEnv* env,
@@ -221,9 +230,6 @@ Java_com_example_test_1camera_MainActivity_updateScreenRatios(
         jint screenWidth,
         jint screenHeight) {
     
-    g_x_ratio = (float)screenWidth / (float)EI_CLASSIFIER_INPUT_WIDTH;
-    g_y_ratio = (float)screenHeight / (float)EI_CLASSIFIER_INPUT_HEIGHT;
-    
-    __android_log_print(ANDROID_LOG_INFO, "MAIN", "Screen ratios updated: x_ratio=%f, y_ratio=%f (screen: %dx%d, model: %dx%d)", 
-                        g_x_ratio, g_y_ratio, screenWidth, screenHeight, EI_CLASSIFIER_INPUT_WIDTH, EI_CLASSIFIER_INPUT_HEIGHT);
+    // Plus nécessaire : le scaling est maintenant géré entièrement en Kotlin
+    __android_log_print(ANDROID_LOG_INFO, "MAIN", "updateScreenRatios: scaling now handled in Kotlin");
 }

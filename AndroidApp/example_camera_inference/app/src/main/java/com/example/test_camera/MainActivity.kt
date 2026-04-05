@@ -203,11 +203,12 @@ class MainActivity : ComponentActivity() {
         private const val OBJECT_COOLDOWN_MS = 10000L  // 10 secondes de cooldown par objet
         private const val PROXIMITY_THRESHOLD = 120f  // 120 pixels de distance max pour les objets de 6480 pixels²
         private const val CALIBRATION_GRID_SIZE = 5  // Grille 5x5 pour la calibration
+        private const val BOUNDING_BOX_SCALE_FACTOR = 1.70f  // Facteur d'agrandissement des bounding boxes (50% plus grand)
     }
 
-    // Variables globales pour les ratios d'écran (synchronisées avec C++)
-    private var g_x_ratio = 1.0f
-    private var g_y_ratio = 1.0f
+    // Variables globales pour les ratios d'écran (plus utilisées)
+    // private var g_x_ratio = 1.0f
+    // private var g_y_ratio = 1.0f
 
     // Suivi des objets déjà comptés avec leur position et timestamp
     data class CountedObject(
@@ -303,13 +304,23 @@ class MainActivity : ComponentActivity() {
     }
 
     // Fonction pour mettre à l'échelle les bounding boxes du modèle vers les coordonnées de la vue
-    // Gère correctement le "fit shortest axis" utilisé dans l'entraînement
+    // Corrigée pour gérer correctement FOMO et éviter les bounding boxes trop petites
     private fun scaleBoundingBox(modelX: Float, modelY: Float, modelWidth: Float, modelHeight: Float): BoundingBox {
         val viewWidth = previewView.width.toFloat()
         val viewHeight = previewView.height.toFloat()
         val modelSize = EI_CLASSIFIER_INPUT_WIDTH.toFloat() // Modèle 320x320
         
-        // Calcul du scaling pour "fit shortest axis"
+        Log.d("SCALING_DEBUG", "Input: ($modelX,$modelY,$modelWidth,$modelHeight)")
+        
+        // Pour FOMO, les coordonnées sont déjà à l'échelle du modèle (320x320)
+        // On n'applique plus de facteur de grille - les coordonnées sont correctes
+        val sourceX = modelX
+        val sourceY = modelY
+        val sourceW = modelWidth
+        val sourceH = modelHeight
+        
+        // Calcul du scaling pour "fit shortest axis" - CORRECT pour le positionnement
+        // L'image doit tenir dans l'écran sans être coupée
         val scale = minOf(viewWidth / modelSize, viewHeight / modelSize)
         
         // Dimensions de l'image après scaling
@@ -321,21 +332,28 @@ class MainActivity : ComponentActivity() {
         val offsetY = (viewHeight - scaledHeight) / 2f
         
         // Mise à l'échelle des coordonnées
-        val scaledX = modelX * scale + offsetX
-        val scaledY = modelY * scale + offsetY
-        val scaledW = modelWidth * scale
-        val scaledH = modelHeight * scale
+        val scaledX = sourceX * scale + offsetX
+        val scaledY = sourceY * scale + offsetY
+        val scaledW = sourceW * scale
+        val scaledH = sourceH * scale
         
-        Log.d("SCALING", "Model: ($modelX,$modelY,$modelWidth,$modelHeight) -> View: ($scaledX,$scaledY,$scaledW,$scaledH)")
-        Log.d("SCALING", "Scale: $scale, offsets: ($offsetX,$offsetY), view: ${viewWidth}x${viewHeight}")
+        // Augmenter légèrement la taille des bounding boxes pour mieux encadrer les objets
+        val sizeIncreaseFactor = BOUNDING_BOX_SCALE_FACTOR // Utilise la constante pour réglage facile
+        val adjustedX = scaledX - (scaledW * (sizeIncreaseFactor - 1) / 2)
+        val adjustedY = scaledY - (scaledH * (sizeIncreaseFactor - 1) / 2)
+        val adjustedW = scaledW * sizeIncreaseFactor
+        val adjustedH = scaledH * sizeIncreaseFactor
+        
+        Log.d("SCALING_DEBUG", "Final: ($adjustedX,$adjustedY,$adjustedW,$adjustedH)")
+        Log.d("SCALING_DEBUG", "Scale: $scale, offsets: ($offsetX,$offsetY), view: ${viewWidth}x${viewHeight}")
         
         return BoundingBox(
             label = "", // Sera rempli plus tard
             confidence = 0f, // Sera rempli plus tard
-            x = scaledX.toInt(),
-            y = scaledY.toInt(),
-            width = scaledW.toInt(),
-            height = scaledH.toInt()
+            x = adjustedX.toInt(),
+            y = adjustedY.toInt(),
+            width = adjustedW.toInt(),
+            height = adjustedH.toInt()
         )
     }
 
@@ -772,15 +790,15 @@ class MainActivity : ComponentActivity() {
                 currentDetectionCount = filteredDetections?.size ?: 0
                 
                 if (filteredDetections != null && filteredDetections.isNotEmpty()) {
-                    // Appliquer la mise à l'échelle correcte pour les bounding boxes (optimisé)
+                    // Appliquer la mise à l'échelle directe depuis le modèle vers la vue
                     val scaledDetections = filteredDetections.map { detection ->
-                        // Utiliser les coordonnées brutes du modèle (inverser le scaling actuel)
-                        val modelX = detection.x.toFloat() / g_x_ratio
-                        val modelY = detection.y.toFloat() / g_y_ratio  
-                        val modelWidth = detection.width.toFloat() / g_x_ratio
-                        val modelHeight = detection.height.toFloat() / g_y_ratio
+                        // Utiliser directement les coordonnées du modèle (320x320)
+                        val modelX = detection.x.toFloat()
+                        val modelY = detection.y.toFloat()
+                        val modelWidth = detection.width.toFloat()
+                        val modelHeight = detection.height.toFloat()
                         
-                        // Appliquer le nouveau scaling correct
+                        // Appliquer le scaling correct
                         val scaledBox = scaleBoundingBox(modelX, modelY, modelWidth, modelHeight)
                         
                         // Conserver label et confidence originaux
@@ -851,17 +869,17 @@ class MainActivity : ComponentActivity() {
     // Système de calibration simplifié - plus de correction de distorsion nécessaire
     // Le nouveau scaling gère correctement l'alignement des bounding boxes
 
-    // Fonction native pour mettre à jour les ratios d'écran
-    private external fun updateScreenRatios(screenWidth: Int, screenHeight: Int)
+    // Fonction native pour mettre à jour les ratios d'écran (plus utilisée)
+    // private external fun updateScreenRatios(screenWidth: Int, screenHeight: Int)
+    
+    // Fonction pour mettre à jour les ratios locaux (plus utilisée)
+    // private fun updateLocalRatios(xRatio: Float, yRatio: Float) {
+    //     g_x_ratio = xRatio
+    //     g_y_ratio = yRatio
+    //     Log.d("RATIOS", "Local ratios updated: x=$g_x_ratio, y=$g_y_ratio")
+    // }
 
-    // Fonction pour mettre à jour les ratios locaux (appelée par le code natif)
-    private fun updateLocalRatios(xRatio: Float, yRatio: Float) {
-        g_x_ratio = xRatio
-        g_y_ratio = yRatio
-        Log.d("RATIOS", "Local ratios updated: x=$g_x_ratio, y=$g_y_ratio")
-    }
-
-    // Fonction pour obtenir les dimensions de l'écran et mettre à jour les ratios
+    // Fonction pour obtenir les dimensions de l'écran (informations de debug)
     private fun updateScreenDimensions() {
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
@@ -871,19 +889,8 @@ class MainActivity : ComponentActivity() {
         Log.d("SCREEN_INFO", "PreviewView: ${previewView.width}x${previewView.height}")
         Log.d("SCREEN_INFO", "BoundingBoxOverlay: ${boundingBoxOverlay.width}x${boundingBoxOverlay.height}")
         
-        // Utiliser les dimensions réelles du PreviewView pour les ratios
-        val previewWidth = if (previewView.width > 0) previewView.width else screenWidth
-        val previewHeight = if (previewView.height > 0) previewView.height else screenHeight
-        
-        // Mettre à jour les ratios locaux aussi
-        g_x_ratio = previewWidth.toFloat() / EI_CLASSIFIER_INPUT_WIDTH.toFloat()
-        g_y_ratio = previewHeight.toFloat() / EI_CLASSIFIER_INPUT_HEIGHT.toFloat()
-        
-        // Mettre à jour les ratios dans le code C++
-        updateScreenRatios(previewWidth, previewHeight)
-        
-        Log.d("SCREEN_INFO", "Ratios calculés avec: ${previewWidth}x${previewHeight}")
-        Log.d("SCREEN_INFO", "Local ratios: x=$g_x_ratio, y=$g_y_ratio")
+        // Plus nécessaire : le scaling est maintenant géré directement dans scaleBoundingBox()
+        Log.d("SCREEN_INFO", "Scaling géré directement dans scaleBoundingBox()")
     }
 
     private fun initCalibration() {
