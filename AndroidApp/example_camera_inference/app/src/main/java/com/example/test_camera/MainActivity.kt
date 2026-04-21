@@ -1154,8 +1154,8 @@ class MainActivity : ComponentActivity() {
                     
                     try {
                         val exif = ExifInterface(tempFile.absolutePath)
-                        exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, "Détections: $detectionCount")
-                        exif.setAttribute("UserComment", "Nombre de détections: $detectionCount")
+                        exif.setAttribute(ExifInterface.TAG_IMAGE_DESCRIPTION, "Detections: $detectionCount")
+                        exif.setAttribute("UserComment", "Nombre de detections: $detectionCount")
                         exif.saveAttributes()
                         Log.d("METADATA", "Métadonnées ajoutées: $detectionCount détections")
                     } catch (e: Exception) {
