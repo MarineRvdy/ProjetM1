@@ -199,7 +199,7 @@ class BoundingBoxOverlay(context: Context, attrs: AttributeSet? = null) : View(c
 class MainActivity : ComponentActivity() {
 
     companion object {
-        private const val CONFIDENCE_THRESHOLD = 0.4f  // 40% confidence threshold (temporairement bas pour test)
+        private const val CONFIDENCE_THRESHOLD = 0.8f  // 40% confidence threshold (temporairement bas pour test)
         private const val OBJECT_COOLDOWN_MS = 10000L  // 10 secondes de cooldown par objet
         private const val PROXIMITY_THRESHOLD = 120f  // 120 pixels de distance max pour les objets de 6480 pixels²
         private const val CALIBRATION_GRID_SIZE = 5  // Grille 5x5 pour la calibration
