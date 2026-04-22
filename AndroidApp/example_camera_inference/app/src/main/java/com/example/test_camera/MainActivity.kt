@@ -979,6 +979,12 @@ class MainActivity : ComponentActivity() {
         yesButton.text = "Détection vraie"
         noButton.text = "Détection fausse"
         trashButton.text = "Trash"
+        
+        // Restaurer les couleurs par défaut : Yes=vert, No=rouge, Trash=gris
+        yesButton.setBackgroundColor(Color.parseColor("#FF669900"))
+        noButton.setBackgroundColor(Color.parseColor("#FFCC0000"))
+        trashButton.setBackgroundColor(Color.parseColor("#FF555555"))
+        
         yesButton.visibility = View.VISIBLE
         noButton.visibility = View.VISIBLE
         trashButton.visibility = View.VISIBLE
@@ -1120,6 +1126,9 @@ class MainActivity : ComponentActivity() {
         yesButton.text = "Objet non détecté"
         trashButton.text = "Trash"
         
+        // Mettre le bouton "Objet non détecté" en orange
+        yesButton.setBackgroundColor(Color.parseColor("#FF9800"))
+        
         yesButton.visibility = View.VISIBLE
         trashButton.visibility = View.VISIBLE
         noButton.visibility = View.GONE  // Masquer le bouton No
@@ -1138,7 +1147,7 @@ class MainActivity : ComponentActivity() {
             put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Detection_$name")
             put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
             put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
-                Environment.DIRECTORY_PICTURES + "/TrividaeDetection/$subfolder")
+                Environment.DIRECTORY_PICTURES + "/TriviidaeDetection/$subfolder")
         }
 
         lifecycleScope.launch(Dispatchers.IO) {
