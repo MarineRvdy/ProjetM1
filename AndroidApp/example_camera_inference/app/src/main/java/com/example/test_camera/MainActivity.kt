@@ -258,6 +258,8 @@ class MainActivity : ComponentActivity() {
     private var currentDetections: List<BoundingBox>? = null
     private var centeredFrameCount = 0  // Compteur de frames centrées
     private val REQUIRED_CENTERED_FRAMES = 5  // Nombre de frames requises pour validation (réduit de 10 à 3)
+    private var lastCenteringMessageTime = 0L  // Pour éviter les messages trop fréquents
+    private val CENTERING_MESSAGE_COOLDOWN = 8000L  // 8 secondes entre les messages de centrage
     private var capturedRotationDegrees = 90
 
     // Variables pour les contrôles de la barre supérieure
@@ -906,9 +908,13 @@ class MainActivity : ComponentActivity() {
         // Afficher le cadre de centrage 320x320
         boundingBoxOverlay.setCenteringMode(true)
         
-        // Afficher un message pour guider l'utilisateur
-        runOnUiThread {
-            Toast.makeText(this, "Centrez la détection dans le cadre", Toast.LENGTH_LONG).show()
+        // Afficher un message pour guider l'utilisateur uniquement si le cooldown est respecté
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastCenteringMessageTime > CENTERING_MESSAGE_COOLDOWN) {
+            lastCenteringMessageTime = currentTime
+            runOnUiThread {
+                Toast.makeText(this, "Centrez la détection dans le cadre", Toast.LENGTH_SHORT).show()
+            }
         }
         
         Log.d("CENTERING", "Entrée en mode centrage")
