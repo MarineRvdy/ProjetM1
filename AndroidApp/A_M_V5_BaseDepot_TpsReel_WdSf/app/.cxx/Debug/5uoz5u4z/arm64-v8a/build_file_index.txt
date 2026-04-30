@@ -1,2 +1,0 @@
-C:\Users\marin\Documents\ISEN\M1\S8\ProjetM1\ProjetM1\AndroidApp\A_M_V5_BaseDepot_TpsReel_WdSf\app\src\main\cpp\CMakeLists.txt
-C:\Users\marin\Documents\ISEN\M1\S8\ProjetM1\ProjetM1\AndroidApp\A_M_V5_BaseDepot_TpsReel_WdSf\app\src\main\cpp\edge-impulse-sdk\cmake\utils.cmake
